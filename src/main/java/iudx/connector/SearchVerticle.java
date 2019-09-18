@@ -41,6 +41,10 @@ public class SearchVerticle extends AbstractVerticle {
 	private String 		database_name;
 	private String 		auth_database;
 	private String 		connectionStr;
+    
+    private String geometry="", relation="", coordinatesS="";
+    private String[] coordinatesArr;
+    private JsonArray coordinates= new JsonArray();
 
 	@Override
 	public void start() throws Exception {
@@ -158,8 +162,23 @@ public class SearchVerticle extends AbstractVerticle {
 		case 6:
 			query = constructGeoCircleQuery(request);
 			return query;
-		}
 
+        case 7:
+            query = constructGeoBboxQuery(request);
+            return query;
+
+        case 8:
+            query = constructGeoPoly_LineQuery(request);
+            return query;
+        
+        case 9:
+            query = constructGeoBboxQuery(request);
+            return query;
+        
+        case 10:
+            query = constructGeoPoly_LineQuery(request);
+            return query;
+        }
 		return query;
 	}
 
@@ -226,6 +245,201 @@ public class SearchVerticle extends AbstractVerticle {
 		return query;
 
 	}
+
+    private JsonObject constructGeoBboxQuery(JsonObject request){
+    
+		resource_group_id = request.getString("resource-group-id");
+		resource_id = request.getString("resource-id");
+
+        geometry="bbox";
+
+        relation = request.containsKey("relation")?request.getString("relation").toLowerCase():"intersects";
+        boolean valid = validateRelation(geometry, relation);
+        if(valid){
+            coordinatesS = request.getString("bbox");
+            coordinatesArr = coordinatesS.split(",");
+            JsonArray temp = new JsonArray();
+            JsonArray y1x1 = new JsonArray().add(getDoubleFromS(coordinatesArr[1])).add(getDoubleFromS(coordinatesArr[0]));
+            JsonArray y1x2 = new JsonArray().add(getDoubleFromS(coordinatesArr[1])).add(getDoubleFromS(coordinatesArr[2]));
+            JsonArray y2x2 = new JsonArray().add(getDoubleFromS(coordinatesArr[3])).add(getDoubleFromS(coordinatesArr[2]));
+            JsonArray y2x1 = new JsonArray().add(getDoubleFromS(coordinatesArr[3])).add(getDoubleFromS(coordinatesArr[0]));
+            temp.add(y1x1).add(y1x2).add(y2x2).add(y2x1).add(y1x1);
+            coordinates.add(temp);
+            query = buildGeoQuery("Polygon",coordinates,relation);
+        
+        } else
+            query=null;
+
+        return query;
+    }
+
+    private JsonObject constructGeoPoly_LineQuery(JsonObject request){
+    
+		resource_group_id = request.getString("resource-group-id");
+		resource_id = request.getString("resource-id");
+        //Polygon or LineString
+        if(request.containsKey("geometry")){
+            if(request.getString("geometry").toUpperCase().contains("Polygon".toUpperCase()))
+                geometry = "Polygon";
+        else if(request.getString("geometry").toUpperCase().contains("lineString".toUpperCase()))
+            geometry = "LineString";
+        }
+
+        relation = request.containsKey("relation")?request.getString("relation").toLowerCase():"intersects";
+        boolean valid = validateRelation(geometry, relation);
+        if(valid){
+            switch(geometry){
+                case "Polygon":
+                    coordinatesS = request.getString("geometry");
+                    coordinatesS = coordinatesS.replaceAll("[a-zA-Z()]","");
+                    coordinatesArr = coordinatesS.split(",");
+                    JsonArray extRing = new JsonArray();
+                    for (int i = 0 ; i<coordinatesArr.length;i+=2){
+                        JsonArray points = new JsonArray();
+                        points.add(getDoubleFromS(coordinatesArr[i+1])).add(getDoubleFromS(coordinatesArr[i]));
+                        extRing.add(points);
+                    }
+                    coordinates.add(extRing);
+                    System.out.println("QUERY: " + coordinates.toString());
+                    query = buildGeoQuery(geometry,coordinates,relation);
+                    break;
+
+                case "LineString":
+                    coordinatesS = request.getString("geometry");
+                    coordinatesS = coordinatesS.replaceAll("[a-zA-Z()]","");
+                    coordinatesArr = coordinatesS.split(",");
+                    for (int i = 0 ; i<coordinatesArr.length;i+=2){
+                        JsonArray points = new JsonArray();
+                        points.add(getDoubleFromS(coordinatesArr[i+1])).add(getDoubleFromS(coordinatesArr[i]));
+                        coordinates.add(points);
+                    }
+                    query = buildGeoQuery(geometry,coordinates,relation);
+                    break;
+            }
+        }else 
+            query=null;
+        
+        return query;
+    }
+
+
+    private JsonObject buildGeoQuery(String geometry, JsonArray coordinates, String relation){
+
+	JsonObject query = new JsonObject();
+
+	switch(relation){
+
+		case "equals": query = new JsonObject()
+						.put("geoJsonLocation.coordinates",coordinates );
+				break;
+
+		case "disjoint": break;
+
+		case "touches": query = searchGeoIntersects(geometry,coordinates);
+				break;
+
+		case "overlaps": query = searchGeoIntersects(geometry,coordinates);
+				 break;
+
+		case "crosses": query = searchGeoIntersects(geometry,coordinates);
+				break;
+
+		case "contains": break;
+
+		case "intersects": query = searchGeoIntersects(geometry,coordinates);
+				            break;
+
+		case "within": query = searchGeoWithin(geometry,coordinates);
+				        break;
+
+        default: break;
+	}
+
+    return query;
+  }
+
+  /**
+   * Helper function to convert string values to Double
+   */
+  private Double getDoubleFromS(String s){
+    Double d = Double.parseDouble(s);
+    return d;
+  }
+
+  /**
+   * Performs Mongo-GeoIntersects operation
+   * */
+
+  private JsonObject searchGeoIntersects(String geometry, JsonArray coordinates){
+
+	JsonObject query = new JsonObject();
+
+	query.put("geoJsonLocation", new JsonObject()
+				.put("$geoIntersects", new JsonObject()
+					.put("$geometry",new JsonObject()
+						.put("type",geometry)
+						.put("coordinates",coordinates))));
+	System.out.println("GeoIntersects: "+query.toString());
+    return query;
+  }
+
+  /**
+   * Performs Mongo-GeoWithin operation
+   * */
+
+  private JsonObject searchGeoWithin(String geometry, JsonArray coordinates){
+
+    JsonObject query = new JsonObject();
+    query.put("geoJsonLocation", new JsonObject()
+            .put("$geoWithin", new JsonObject()
+                .put("$geometry",new JsonObject()
+                    .put("type",geometry)
+                    .put("coordinates",coordinates))));
+    System.out.println("GeoWithin: " + query.toString());
+    return query;
+  }
+
+  /**
+   *Helper function to validate relation for specified geometry.
+   */
+
+  private boolean validateRelation(String geometry, String relation){
+
+	if(geometry.equalsIgnoreCase("bbox") && (relation.equalsIgnoreCase("equals")
+							||relation.equalsIgnoreCase("disjoint")
+							|| relation.equalsIgnoreCase("touches")
+							|| relation.equalsIgnoreCase("overlaps")
+							|| relation.equalsIgnoreCase("crosses")
+							|| relation.equalsIgnoreCase("intersects")
+							|| relation.equalsIgnoreCase("within") )){
+
+		return true;
+	}
+
+    else if(geometry.equalsIgnoreCase("linestring") && (relation.equalsIgnoreCase("equals")
+							||relation.equalsIgnoreCase("disjoint")
+							|| relation.equalsIgnoreCase("touches")
+							|| relation.equalsIgnoreCase("overlaps")
+							|| relation.equalsIgnoreCase("crosses")
+							|| relation.equalsIgnoreCase("intersects") )){
+
+		return true;
+	}
+	else if(geometry.equalsIgnoreCase("polygon") && (relation.equalsIgnoreCase("equals")
+							||relation.equalsIgnoreCase("disjoint")
+							|| relation.equalsIgnoreCase("touches")
+							|| relation.equalsIgnoreCase("overlaps")
+							|| relation.equalsIgnoreCase("crosses")
+							|| relation.equalsIgnoreCase("intersects")
+							|| relation.equalsIgnoreCase("within") )){
+
+		return true;
+	}
+
+    else
+	   return false;
+
+  }
 
 	private void searchDatabase(int state, String COLLECTION, JsonObject query, JsonObject attributeFilter,
 			Message<Object> message) {

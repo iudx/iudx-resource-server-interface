@@ -127,6 +127,17 @@ public class APIServerVerticle extends AbstractVerticle {
 			publishEvent(event, requested_data, options, response);
 			break;			
 			
+		case 7:
+			logger.info("case-7: geo search(bbox) for an item group");
+			options.addHeader("state", "7");
+			publishEvent(event,requested_data, options, response);
+			break;			
+
+		case 8:
+			logger.info("case-8: geo search(Polygon/LineString) for an item group");
+			options.addHeader("state", "8");
+			publishEvent(event,requested_data, options, response);
+			break;			
 		}
 	}
 
@@ -157,6 +168,20 @@ public class APIServerVerticle extends AbstractVerticle {
 			options.addHeader("state", Integer.toString(state));
 			options.addHeader("options", "count");
 			publishEvent(event, requested_data, options, response);
+			break;
+		
+        case 9:
+			logger.info("case-9: count for geo search(bbox) for an item group");
+			options.addHeader("state", "9");
+			options.addHeader("options", "count");
+			publishEvent(event,requested_data, options, response);
+			break;
+		
+        case 10:
+			logger.info("case-10: count for geo search(Polygon/LineString) for an item group");
+			options.addHeader("state", "10");
+			options.addHeader("options", "count");
+			publishEvent(event,requested_data, options, response);
 			break;
 		}
 	}
@@ -225,6 +250,26 @@ public class APIServerVerticle extends AbstractVerticle {
 			state = 6;
 		}
 		
+		else if (api.equalsIgnoreCase("search") && !requested_data.containsKey("options") && requested_data.containsKey("resource-group-id")
+				&& requested_data.containsKey("bbox")) {
+			state = 7;
+		}
+
+		else if (api.equalsIgnoreCase("search") && !requested_data.containsKey("options") && requested_data.containsKey("resource-group-id")
+				&& requested_data.containsKey("geometry")) {
+			state = 8;
+		}
+		
+        else if (api.equalsIgnoreCase("count") && !requested_data.containsKey("options") && requested_data.containsKey("resource-group-id")
+				&& requested_data.containsKey("bbox")) {
+			state = 9;
+		}
+
+		else if (api.equalsIgnoreCase("count") && !requested_data.containsKey("options") && requested_data.containsKey("resource-group-id")
+				&& requested_data.containsKey("geometry")) {
+			state = 10;
+		}
+
 		
 		return state;
 	}
