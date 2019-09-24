@@ -138,6 +138,14 @@ public class APIServerVerticle extends AbstractVerticle {
 			options.addHeader("state", "8");
 			publishEvent(event,requested_data, options, response);
 			break;			
+
+
+		case 11:
+			logger.info("case-11: attribute search for resource for an item group");
+			options.addHeader("state","11");
+			publishEvent(event,requested_data,options,response);
+			break;
+
 		}
 	}
 
@@ -182,6 +190,13 @@ public class APIServerVerticle extends AbstractVerticle {
 			options.addHeader("state", "10");
 			options.addHeader("options", "count");
 			publishEvent(event,requested_data, options, response);
+			break;
+
+		case 12:
+			logger.info("case-12: count for attribute search for an item group");
+			options.addHeader("state","12");
+			options.addHeader("options","count");
+			publishEvent(event,requested_data,options, response);
 			break;
 		}
 	}
@@ -270,7 +285,21 @@ public class APIServerVerticle extends AbstractVerticle {
 			state = 10;
 		}
 
-		
+		else if (api.equalsIgnoreCase("search") && !requested_data.containsKey("options") && requested_data.containsKey("resource-group-id")
+				&& requested_data.containsKey("bbox")) {
+			state = 7;
+		}
+
+		else if (api.equalsIgnoreCase("search") && requested_data.containsKey("attribute-name") && requested_data.containsKey("attribute-value")
+				&& requested_data.containsKey("resource-group")){
+			state=11;
+		}
+
+		else if (api.equalsIgnoreCase("count") && requested_data.containsKey("attribute-name") && requested_data.containsKey("attribute-value")
+				&& (requested_data.containsKey("comparison-operator") || requested_data.containsKey("logical-oprator"))
+				&& requested_data.containsKey("resource-group")){
+			state=12;
+		}
 		return state;
 	}
 	

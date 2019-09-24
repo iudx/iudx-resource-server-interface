@@ -11,6 +11,7 @@ import java.util.Properties;
 
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.eventbus.Message;
+import io.vertx.core.json.Json;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.logging.Logger;
@@ -164,7 +165,7 @@ public class SearchVerticle extends AbstractVerticle {
 			return query;
 
         case 7:
-            query = constructGeoBboxQuery(request);
+			query = constructGeoBboxQuery(request);
             return query;
 
         case 8:
@@ -178,7 +179,15 @@ public class SearchVerticle extends AbstractVerticle {
         case 10:
             query = constructGeoPoly_LineQuery(request);
             return query;
-        }
+
+		case 11:
+			query = constructAttributeQuery(request);
+			return query;
+
+		case 12:
+			query = constructAttributeQuery(request);
+			return query;
+		}
 		return query;
 	}
 
@@ -252,6 +261,8 @@ public class SearchVerticle extends AbstractVerticle {
 		resource_id = request.getString("resource-id");
 
         geometry="bbox";
+        JsonObject geoQuery = new JsonObject();
+		JsonArray expressions = new JsonArray();
 
         relation = request.containsKey("relation")?request.getString("relation").toLowerCase():"intersects";
         boolean valid = validateRelation(geometry, relation);
@@ -265,10 +276,17 @@ public class SearchVerticle extends AbstractVerticle {
             JsonArray y2x1 = new JsonArray().add(getDoubleFromS(coordinatesArr[3])).add(getDoubleFromS(coordinatesArr[0]));
             temp.add(y1x1).add(y1x2).add(y2x2).add(y2x1).add(y1x1);
             coordinates.add(temp);
-            query = buildGeoQuery("Polygon",coordinates,relation);
+            geoQuery = buildGeoQuery("Polygon",coordinates,relation);
         
         } else
-            query=null;
+            geoQuery=null;
+
+        if (request.containsKey("attribute-name") && request.containsKey("attribute-value")){
+			JsonObject attributeQuery = constructAttributeQuery(request);
+			expressions.add(geoQuery).add(attributeQuery);
+			query.put("$and",expressions);
+		} else
+			query=geoQuery;
 
         return query;
     }
@@ -277,6 +295,9 @@ public class SearchVerticle extends AbstractVerticle {
     
 		resource_group_id = request.getString("resource-group-id");
 		resource_id = request.getString("resource-id");
+		JsonObject geoQuery = new JsonObject();
+		JsonArray expressions = new JsonArray();
+
         //Polygon or LineString
         if(request.containsKey("geometry")){
             if(request.getString("geometry").toUpperCase().contains("Polygon".toUpperCase()))
@@ -315,14 +336,88 @@ public class SearchVerticle extends AbstractVerticle {
                     }
                     query = buildGeoQuery(geometry,coordinates,relation);
                     break;
-            }
+				default:
+					throw new IllegalStateException("Unexpected value: " + geometry);
+			}
         }else 
-            query=null;
-        
+            geoQuery=null;
+
+		if (request.containsKey("attribute-name") && request.containsKey("attribute-value")){
+			JsonObject attributeQuery = constructAttributeQuery(request);
+			expressions.add(geoQuery).add(attributeQuery);
+			query.put("$and",expressions);
+		} else
+			query=geoQuery;
+
         return query;
     }
 
+	private JsonObject constructAttributeQuery(JsonObject request){
+		JsonObject query = new JsonObject();
+		resource_group_id = request.getString("resource-group-id");
+		resource_id = request.getString("resource-id");
 
+			String attribute_name = request.getString("attribute-name");
+			String attribute_value = request.getString("attribute-value");
+			String attr_v_s, comparison_operator;
+			comparison_operator=request.getString("comparison-operator").toLowerCase();
+//			Double attr_v_n;
+//			if(isNumeric(attribute_value))
+//				attr_v_n=Double.parseDouble(attribute_value);
+//			else
+//				attr_v_s=attribute_value;
+
+			switch (comparison_operator){
+
+				case "propertyisequalto":
+					query.put(attribute_name,attribute_value);
+					break;
+
+				case "propertyisnotequalto":
+					query.put(attribute_name,new JsonObject().put("$ne",attribute_value));
+					break;
+
+				case "propertyislessthan":
+					query.put(attribute_name,new JsonObject().put("$lt",attribute_value));
+					break;
+
+				case "propertyisgreaterthan":
+					query.put(attribute_name,new JsonObject().put("$gt",attribute_value));
+					break;
+
+				case "propertyislessthanequalto":
+					query.put(attribute_name, new JsonObject().put("$lte",attribute_value));
+					break;
+
+				case "propertyisgreaterthanequalto":
+					query.put(attribute_name, new JsonObject().put("$gte",attribute_value));
+					break;
+
+				case "propertyislike":
+					query.put(attribute_name,new JsonObject().put("$regex",attribute_value)
+																.put("$options","i"));
+					break;
+
+				case "propertyisbetween":
+					String[] attr_arr = attribute_value.split(",");
+					query.put(attribute_name,new JsonObject().put("$gte",attr_arr[0])
+																.put("$lte",attr_arr[1]));
+
+					break;
+
+			}
+		return query;
+	}
+
+	private boolean isNumeric(String s){
+
+		try {
+				double d = Double.parseDouble(s);
+		}catch (NumberFormatException | NullPointerException e){
+			return false;
+		}
+		return true;
+	}
     private JsonObject buildGeoQuery(String geometry, JsonArray coordinates, String relation){
 
 	JsonObject query = new JsonObject();
@@ -502,6 +597,43 @@ public class SearchVerticle extends AbstractVerticle {
 			mongoCount(state, COLLECTION, query, message);
 			break;
 
+		case 7:
+			api="search";
+			attributeFilter.put("_id", 0);
+			findOptions = new FindOptions();
+			findOptions.setFields(attributeFilter);
+			mongoFind(api, state, COLLECTION, query, findOptions, message);
+			break;
+
+		case 8:
+			api="search";
+			attributeFilter.put("_id", 0);
+			findOptions = new FindOptions();
+			findOptions.setFields(attributeFilter);
+			mongoFind(api, state, COLLECTION, query, findOptions, message);
+			break;
+
+		case 9:
+			api="count";
+			mongoCount(state,COLLECTION,query,message);
+
+		case 10:
+			api="count";
+			mongoCount(state,COLLECTION,query,message);
+
+		case 11:
+			api="search";
+			attributeFilter.put("_id", 0);
+			findOptions = new FindOptions();
+			findOptions.setFields(attributeFilter);
+			mongoFind(api, state, COLLECTION, query, findOptions, message);
+
+		case 12:
+			api="count";
+			mongoCount(state,COLLECTION,query,message);
+
+			default:
+				throw new IllegalStateException("Unexpected value: " + state);
 		}
 	}
 
