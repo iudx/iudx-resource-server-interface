@@ -157,11 +157,13 @@ public class APIServerVerticle extends AbstractVerticle {
 		DeliveryOptions options = new DeliveryOptions();
 
 		api = "metrics"; 
+
 		event = "get-metrics"; 
 
 		metrics = new JsonObject();
 		metrics.put("time", ZonedDateTime.now( ZoneOffset.UTC ).format( DateTimeFormatter.ISO_INSTANT ));
 		
+
 		publishEvent(event, requested_data, options, response);
 		
 	}
@@ -230,6 +232,7 @@ public class APIServerVerticle extends AbstractVerticle {
 	private void updatemetrics(JsonObject requested_data, JsonObject metrics) {
 
 		metrics.put("api", api);
+		metrics.put("endpoint", api);
 		metrics.put("resource-group-id", requested_data.getString("resource-group-id"));
 
 		if (state != 5 || state != 6) 
