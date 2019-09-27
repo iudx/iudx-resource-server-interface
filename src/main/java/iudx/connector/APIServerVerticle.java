@@ -230,76 +230,82 @@ public class APIServerVerticle extends AbstractVerticle {
 		requested_data.remove("id");
 		
 		state = 0;
-
 		if (api.equalsIgnoreCase("search") && requested_data.containsKey("options") && requested_data.containsKey("resource-group-id")
-				&& requested_data.containsKey("resource-id")) {
-			state = 1; 
+				&& requested_data.containsKey("resource-id") && !requested_data.containsKey("time")  && !requested_data.containsKey("lat")
+				&& !requested_data.containsKey("geometry") && !requested_data.containsKey("attribute-name")) {
+			state = 1;
+
 		}
 
 		else if (api.equalsIgnoreCase("search") && requested_data.containsKey("options") && requested_data.containsKey("resource-group-id")
-				&& !requested_data.containsKey("resource-id")) {
+				&& !requested_data.containsKey("resource-id") && !requested_data.containsKey("time")  && !requested_data.containsKey("lat")
+				&& !requested_data.containsKey("geometry") && !requested_data.containsKey("attribute-name")) {
 			state = 2;
 		}
 
 		else if (api.equalsIgnoreCase("search") && !requested_data.containsKey("options") && requested_data.containsKey("resource-group-id")
 				&& requested_data.containsKey("resource-id") && requested_data.containsKey("time")
-				&& requested_data.containsKey("TRelation")) {
+				&& requested_data.containsKey("TRelation")  && !requested_data.containsKey("lat")
+				&& !requested_data.containsKey("geometry") && !requested_data.containsKey("attribute-name")) {
 			state = 3;
 		}
 
 		else if (api.equalsIgnoreCase("count") && !requested_data.containsKey("options") && requested_data.containsKey("resource-group-id")
 				&& requested_data.containsKey("resource-id") && requested_data.containsKey("time")
-				&& requested_data.containsKey("TRelation")) {
+				&& requested_data.containsKey("TRelation")  && !requested_data.containsKey("lat")
+				&& !requested_data.containsKey("geometry") && !requested_data.containsKey("attribute-name")) {
 			state = 4;
 		}
 
 		else if (api.equalsIgnoreCase("search") && !requested_data.containsKey("options") && requested_data.containsKey("resource-group-id")
 				&& requested_data.containsKey("lat") && requested_data.containsKey("lon")
-				&& requested_data.containsKey("radius")) {
+				&& requested_data.containsKey("radius") && !requested_data.containsKey("time")
+				&& !requested_data.containsKey("geometry")) {
 			state = 5;
 		}
 
 		else if (api.equalsIgnoreCase("count") && !requested_data.containsKey("options") && requested_data.containsKey("resource-group-id")
 				&& requested_data.containsKey("lat") && requested_data.containsKey("lon")
-				&& requested_data.containsKey("radius")) {
+				&& requested_data.containsKey("radius") && !requested_data.containsKey("time")
+				&& !requested_data.containsKey("geometry")) {
 			state = 6;
 		}
 		
 		else if (api.equalsIgnoreCase("search") && !requested_data.containsKey("options") && requested_data.containsKey("resource-group-id")
-				&& requested_data.containsKey("bbox")) {
+				&& requested_data.containsKey("bbox") && !requested_data.containsKey("time")  && !requested_data.containsKey("lat")
+				&& !requested_data.containsKey("geometry")) {
 			state = 7;
 		}
 
 		else if (api.equalsIgnoreCase("search") && !requested_data.containsKey("options") && requested_data.containsKey("resource-group-id")
-				&& requested_data.containsKey("geometry")) {
+				&& requested_data.containsKey("geometry") && !requested_data.containsKey("time")  && !requested_data.containsKey("lat")) {
 			state = 8;
 		}
 		
         else if (api.equalsIgnoreCase("count") && !requested_data.containsKey("options") && requested_data.containsKey("resource-group-id")
-				&& requested_data.containsKey("bbox")) {
+				&& requested_data.containsKey("bbox") && !requested_data.containsKey("time")  && !requested_data.containsKey("lat")
+				&& !requested_data.containsKey("geometry")) {
 			state = 9;
 		}
 
 		else if (api.equalsIgnoreCase("count") && !requested_data.containsKey("options") && requested_data.containsKey("resource-group-id")
-				&& requested_data.containsKey("geometry")) {
+				&& requested_data.containsKey("geometry") && !requested_data.containsKey("time")  && !requested_data.containsKey("lat")) {
 			state = 10;
 		}
 
-		else if (api.equalsIgnoreCase("search") && !requested_data.containsKey("options") && requested_data.containsKey("resource-group-id")
-				&& requested_data.containsKey("bbox")) {
-			state = 7;
-		}
-
 		else if (api.equalsIgnoreCase("search") && requested_data.containsKey("attribute-name") && requested_data.containsKey("attribute-value")
-				&& requested_data.containsKey("resource-group")){
+				&& requested_data.containsKey("resource-group-id") && (requested_data.containsKey("comparison-operator") || requested_data.containsKey("logical-operator"))
+				&& !requested_data.containsKey("time")  && !requested_data.containsKey("lat") && !requested_data.containsKey("geometry")){
 			state=11;
 		}
 
 		else if (api.equalsIgnoreCase("count") && requested_data.containsKey("attribute-name") && requested_data.containsKey("attribute-value")
-				&& (requested_data.containsKey("comparison-operator") || requested_data.containsKey("logical-oprator"))
-				&& requested_data.containsKey("resource-group")){
+				&& (requested_data.containsKey("comparison-operator") || requested_data.containsKey("logical-operator"))
+				&& requested_data.containsKey("resource-group-id") && !requested_data.containsKey("time")  && !requested_data.containsKey("lat")
+				&& !requested_data.containsKey("geometry")){
 			state=12;
 		}
+		System.out.println("STATE: "+ state);
 		return state;
 	}
 	

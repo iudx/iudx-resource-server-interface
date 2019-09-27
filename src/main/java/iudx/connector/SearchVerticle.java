@@ -30,7 +30,6 @@ public class SearchVerticle extends AbstractVerticle {
 	private static String startTime;
 	private static String endTime;
 	private static String TRelation;
-
 	private JsonObject query, isotime;
 	
 	private MongoClient mongo;
@@ -42,10 +41,14 @@ public class SearchVerticle extends AbstractVerticle {
 	private String 		database_name;
 	private String 		auth_database;
 	private String 		connectionStr;
+	private static final String COLLECTION = "archive";
+	private JsonObject resourceQuery,finalQuery;
+
     
     private String geometry="", relation="", coordinatesS="";
     private String[] coordinatesArr;
-    private JsonArray coordinates= new JsonArray();
+    private JsonArray coordinates;
+    private JsonArray expressions;
 
 	@Override
 	public void start() throws Exception {
@@ -132,63 +135,73 @@ public class SearchVerticle extends AbstractVerticle {
 
 		JsonObject request = (JsonObject) message.body();
 		query = new JsonObject();
+		finalQuery = new JsonObject();
+		resourceQuery = new JsonObject();
 		isotime = new JsonObject();
+		resource_group_id = request.getString("resource-group-id");
+		resource_id = request.getString("resource-id");
+		resourceQuery.put("__resource-id",resource_id);
+		resourceQuery.put("__resource-group",resource_group_id);
 
 		switch (state) {
 		case 1:
 			options = request.getString("options");
-			resource_group_id = request.getString("resource-group-id");
-			resource_id = request.getString("resource-id");
-
-			query.put("__resource-id", resource_id);
-			break;
+			//resource_group_id = request.getString("resource-group-id");
+			//resource_id = request.getString("resource-id");
+			//resourceQuery.put("__resource-id", resource_id);
+			return resourceQuery;
 
 		case 2:
 			options = request.getString("options");
-			resource_group_id = request.getString("resource-group-id");
+			//resource_group_id = request.getString("resource-group-id");
+			query=resourceQuery;
 			return query;
 
 		case 3:
 			query = constructTimeSeriesQuery(request);
-			return query;
+			break;
 
 		case 4:
 			query = constructTimeSeriesQuery(request);
-			return query;
+			break;
 
 		case 5:
 			query = constructGeoCircleQuery(request);
-			return query;
+			break;
 
 		case 6:
 			query = constructGeoCircleQuery(request);
-			return query;
+			break;
 
         case 7:
 			query = constructGeoBboxQuery(request);
-            return query;
+            break;
 
         case 8:
             query = constructGeoPoly_LineQuery(request);
-            return query;
+            break;
         
         case 9:
             query = constructGeoBboxQuery(request);
-            return query;
+            break;
         
         case 10:
             query = constructGeoPoly_LineQuery(request);
-            return query;
+            break;
 
 		case 11:
 			query = constructAttributeQuery(request);
-			return query;
+			break;
 
 		case 12:
 			query = constructAttributeQuery(request);
-			return query;
+			break;
 		}
-		return query;
+		expressions=new JsonArray();
+		expressions.add(resourceQuery).add(query);
+		finalQuery.put("$and",expressions);
+		System.out.println("FINAL QUERY: "+finalQuery.toString());
+		return finalQuery;
 	}
 
 	double MetersToDecimalDegrees(double meters, double latitude) {
@@ -240,9 +253,6 @@ public class SearchVerticle extends AbstractVerticle {
 	}
 
 	private JsonObject constructGeoCircleQuery(JsonObject request) {
-
-		resource_group_id = request.getString("resource-group-id");
-		resource_id = request.getString("resource-id");
 		double latitude = Double.parseDouble(request.getString("lat"));
 		double longitude = Double.parseDouble(request.getString("lon"));
 		double rad = MetersToDecimalDegrees(Double.parseDouble(request.getString("radius")), latitude);
@@ -256,14 +266,10 @@ public class SearchVerticle extends AbstractVerticle {
 	}
 
     private JsonObject constructGeoBboxQuery(JsonObject request){
-    
-		resource_group_id = request.getString("resource-group-id");
-		resource_id = request.getString("resource-id");
-
         geometry="bbox";
         JsonObject geoQuery = new JsonObject();
 		JsonArray expressions = new JsonArray();
-
+		coordinates = new JsonArray();
         relation = request.containsKey("relation")?request.getString("relation").toLowerCase():"intersects";
         boolean valid = validateRelation(geometry, relation);
         if(valid){
@@ -292,12 +298,10 @@ public class SearchVerticle extends AbstractVerticle {
     }
 
     private JsonObject constructGeoPoly_LineQuery(JsonObject request){
-    
-		resource_group_id = request.getString("resource-group-id");
-		resource_id = request.getString("resource-id");
+
 		JsonObject geoQuery = new JsonObject();
 		JsonArray expressions = new JsonArray();
-
+		coordinates = new JsonArray();
         //Polygon or LineString
         if(request.containsKey("geometry")){
             if(request.getString("geometry").toUpperCase().contains("Polygon".toUpperCase()))
@@ -353,19 +357,16 @@ public class SearchVerticle extends AbstractVerticle {
     }
 
 	private JsonObject constructAttributeQuery(JsonObject request){
-		JsonObject query = new JsonObject();
-		resource_group_id = request.getString("resource-group-id");
-		resource_id = request.getString("resource-id");
 
-			String attribute_name = request.getString("attribute-name");
-			String attribute_value = request.getString("attribute-value");
-			String attr_v_s, comparison_operator;
-			comparison_operator=request.getString("comparison-operator").toLowerCase();
-//			Double attr_v_n;
-//			if(isNumeric(attribute_value))
-//				attr_v_n=Double.parseDouble(attribute_value);
-//			else
-//				attr_v_s=attribute_value;
+		JsonObject query = new JsonObject();
+		String attribute_name = request.getString("attribute-name");
+		String attribute_value = request.getString("attribute-value");
+		String comparison_operator;
+		comparison_operator=request.getString("comparison-operator").toLowerCase();
+		System.out.println("ATTRIBUTE SEARCH");
+		Double attr_v_n=0.0;
+		if(isNumeric(attribute_value))
+			attr_v_n=Double.parseDouble(attribute_value);
 
 			switch (comparison_operator){
 
@@ -374,23 +375,23 @@ public class SearchVerticle extends AbstractVerticle {
 					break;
 
 				case "propertyisnotequalto":
-					query.put(attribute_name,new JsonObject().put("$ne",attribute_value));
+					query = numericQuery(attribute_name,attr_v_n,"$ne");
 					break;
 
 				case "propertyislessthan":
-					query.put(attribute_name,new JsonObject().put("$lt",attribute_value));
+					query = numericQuery(attribute_name,attr_v_n,"$lt");
 					break;
 
 				case "propertyisgreaterthan":
-					query.put(attribute_name,new JsonObject().put("$gt",attribute_value));
+					query = numericQuery(attribute_name,attr_v_n,"$gt");
 					break;
 
 				case "propertyislessthanequalto":
-					query.put(attribute_name, new JsonObject().put("$lte",attribute_value));
+					query = numericQuery(attribute_name,attr_v_n,"$lte");
 					break;
 
 				case "propertyisgreaterthanequalto":
-					query.put(attribute_name, new JsonObject().put("$gte",attribute_value));
+					query = numericQuery(attribute_name,attr_v_n,"$gte");
 					break;
 
 				case "propertyislike":
@@ -400,14 +401,21 @@ public class SearchVerticle extends AbstractVerticle {
 
 				case "propertyisbetween":
 					String[] attr_arr = attribute_value.split(",");
-					query.put(attribute_name,new JsonObject().put("$gte",attr_arr[0])
-																.put("$lte",attr_arr[1]));
+					query.put("$expr",new JsonObject()
+										.put("$and",new JsonArray().add(new JsonObject()
+													.put("$gt",new JsonArray().add(new JsonObject().put("$toDouble","$"+attribute_name)).add(getDoubleFromS(attr_arr[0]))))
+													.add(new JsonObject()
+															.put("$lt",new JsonArray().add(new JsonObject().put("$toDouble","$"+attribute_name)).add(getDoubleFromS(attr_arr[1]))))));
 
 					break;
 
 			}
 		return query;
 	}
+
+	/**
+	 * Helper function to determine if the attribute-value has a numeric value as String
+	 **/
 
 	private boolean isNumeric(String s){
 
@@ -418,6 +426,7 @@ public class SearchVerticle extends AbstractVerticle {
 		}
 		return true;
 	}
+
     private JsonObject buildGeoQuery(String geometry, JsonArray coordinates, String relation){
 
 	JsonObject query = new JsonObject();
@@ -459,6 +468,21 @@ public class SearchVerticle extends AbstractVerticle {
   private Double getDoubleFromS(String s){
     Double d = Double.parseDouble(s);
     return d;
+  }
+
+  /**
+   * Helper function to generate query in mongo to compare Numeric values encoded
+   * as Strings with Numbers
+   **/
+  private JsonObject numericQuery(String attrName, Double attrValue, String comparisonOp){
+
+  	JsonObject query = new JsonObject();
+  	query.put("$expr", new JsonObject()
+						.put(comparisonOp,new JsonArray()
+									.add(new JsonObject()
+											.put("$toDouble","$"+attrName))
+									.add(attrValue)));
+  	return query;
   }
 
   /**
@@ -616,10 +640,12 @@ public class SearchVerticle extends AbstractVerticle {
 		case 9:
 			api="count";
 			mongoCount(state,COLLECTION,query,message);
+			break;
 
 		case 10:
 			api="count";
 			mongoCount(state,COLLECTION,query,message);
+			break;
 
 		case 11:
 			api="search";
@@ -627,13 +653,12 @@ public class SearchVerticle extends AbstractVerticle {
 			findOptions = new FindOptions();
 			findOptions.setFields(attributeFilter);
 			mongoFind(api, state, COLLECTION, query, findOptions, message);
+			break;
 
 		case 12:
 			api="count";
 			mongoCount(state,COLLECTION,query,message);
-
-			default:
-				throw new IllegalStateException("Unexpected value: " + state);
+			break;
 		}
 	}
 
