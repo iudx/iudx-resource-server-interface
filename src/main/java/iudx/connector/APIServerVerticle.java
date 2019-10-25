@@ -70,7 +70,7 @@ public class APIServerVerticle extends AbstractVerticle {
 	private String level;
 	
 	private static int totalRequestsPerDay; 
-	
+
 	@Override
 	public void start() {
 
