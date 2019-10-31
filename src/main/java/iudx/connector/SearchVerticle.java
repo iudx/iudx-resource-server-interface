@@ -296,7 +296,7 @@ public class SearchVerticle extends AbstractVerticle {
 		double rad = MetersToDecimalDegrees(Double.parseDouble(request.getString("radius")), latitude);
 
 		query = new JsonObject();
-		query.put("location", new JsonObject().put("$geoWithin", new JsonObject().put("$center",
+		query.put("__geoJsonLocation", new JsonObject().put("$geoWithin", new JsonObject().put("$center",
 				new JsonArray().add(new JsonArray().add(longitude).add(latitude)).add(rad))));
 
 		return query;
