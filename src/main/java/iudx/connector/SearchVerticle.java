@@ -92,9 +92,9 @@ public class SearchVerticle extends AbstractVerticle {
 	    } 
 	    
 		mongoconfig		= 	new JsonObject()
-						.put("username", database_user)
-						.put("password", database_password)
-						.put("authSource", auth_database)
+						//.put("username", database_user)
+						//.put("password", database_password)
+						//.put("authSource", auth_database)
 						.put("host", database_host)
 						.put("port", database_port)
 						.put("db_name", database_name);
@@ -215,7 +215,9 @@ public class SearchVerticle extends AbstractVerticle {
 		resource_id = request.getString("resource-id");
 		time = request.getString("time");
 		TRelation = request.getString("TRelation");
-
+		JsonObject attributeQuery = new JsonObject();
+		JsonObject timeQuery = new JsonObject();
+		JsonArray expressions = new JsonArray();
 		if (TRelation.contains("during")) {
 
 			timeStamp = time.split("/");
@@ -232,10 +234,10 @@ public class SearchVerticle extends AbstractVerticle {
 			endDateTime = new JsonObject();
 			endDateTime.put("$date", endInstant);
 			
-			query.put("__resource-id", resource_id);
+			//timeQuery.put("__resource-id", resource_id);
 			isotime.put("$gte", startDateTime);
 			isotime.put("$lte", endDateTime);
-			query.put("__time", isotime);
+			timeQuery.put("__time", isotime);
 		}
 
 		else if (TRelation.contains("before")) {
@@ -245,9 +247,9 @@ public class SearchVerticle extends AbstractVerticle {
 			dateTime = new JsonObject();
 			dateTime.put("$date", instant);
 
-			query.put("__resource-id", resource_id);
+			//timeQuery.put("__resource-id", resource_id);
 			isotime.put("$lte", dateTime);
-			query.put("__time", isotime);
+			timeQuery.put("__time", isotime);
 		}
 
 		else if (TRelation.contains("after")) {
@@ -257,9 +259,9 @@ public class SearchVerticle extends AbstractVerticle {
 			dateTime = new JsonObject();
 			dateTime.put("$date", instant);
 			
-			query.put("__resource-id", resource_id);
+			//timeQuery.put("__resource-id", resource_id);
 			isotime.put("$gte", dateTime);
-			query.put("__time", isotime);
+			timeQuery.put("__time", isotime);
 		}
 
 		else if (TRelation.contains("TEquals")) {
@@ -269,11 +271,19 @@ public class SearchVerticle extends AbstractVerticle {
 			dateTime = new JsonObject();
 			dateTime.put("$date", instant);
 
-			query.put("__resource-id", resource_id);
+			//query.put("__resource-id", resource_id);
 			isotime.put("$eq", dateTime);
 			query.put("__time", isotime);
 
 		}
+		if(request.containsKey("attribute-name") && request.containsKey("attribute-value")){
+			attributeQuery = constructAttributeQuery(request);
+			expressions.add(timeQuery).add(attributeQuery);
+			query.put("$and",expressions);
+			logger.info("TIME QUERY + ATTRIBUTE QUERY");
+		}else
+			query = timeQuery;
+
 		System.out.println(query);
 		
 		return query;
@@ -462,7 +472,7 @@ public class SearchVerticle extends AbstractVerticle {
 	switch(relation){
 
 		case "equals": query = new JsonObject()
-						.put("geoJsonLocation.coordinates",coordinates );
+						.put("__geoJsonLocation.coordinates",coordinates );
 				break;
 
 		case "disjoint": break;
@@ -521,7 +531,7 @@ public class SearchVerticle extends AbstractVerticle {
 
 	JsonObject query = new JsonObject();
 
-	query.put("geoJsonLocation", new JsonObject()
+	query.put("__geoJsonLocation", new JsonObject()
 				.put("$geoIntersects", new JsonObject()
 					.put("$geometry",new JsonObject()
 						.put("type",geometry)
@@ -537,7 +547,7 @@ public class SearchVerticle extends AbstractVerticle {
   private JsonObject searchGeoWithin(String geometry, JsonArray coordinates){
 
     JsonObject query = new JsonObject();
-    query.put("geoJsonLocation", new JsonObject()
+    query.put("__geoJsonLocation", new JsonObject()
             .put("$geoWithin", new JsonObject()
                 .put("$geometry",new JsonObject()
                     .put("type",geometry)
@@ -678,7 +688,14 @@ public class SearchVerticle extends AbstractVerticle {
 		case 11:
 			api="search";
 			attributeFilter.put("_id", 0);
+			JsonObject obj = (JsonObject) message.body();
+			String requestOptions = obj.containsKey("options")?obj.getString("options"):null;
 			findOptions = new FindOptions();
+			if(requestOptions!=null){
+				JsonObject sortFil = new JsonObject().put("__time",-1);
+				findOptions.setSort(sortFil);
+				findOptions.setLimit(1);
+			}
 			findOptions.setFields(attributeFilter);
 			mongoFind(api, state, COLLECTION, query, findOptions, message);
 			break;
