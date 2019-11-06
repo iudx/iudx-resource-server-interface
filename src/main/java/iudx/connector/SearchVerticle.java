@@ -646,9 +646,12 @@ public class SearchVerticle extends AbstractVerticle {
 		case 3:
 			api = "search";
 			attributeFilter.put("_id", 0);
+			sortFilter = new JsonObject();
+			sortFilter.put("__time", -1);
 
 			findOptions = new FindOptions();
 			findOptions.setFields(attributeFilter);
+			findOptions.setSort(sortFilter);
 			mongoFind(api, state, COLLECTION, query, findOptions, message);
 			break;
 
@@ -660,9 +663,12 @@ public class SearchVerticle extends AbstractVerticle {
 		case 5:
 			api = "search";
 			attributeFilter.put("_id", 0);
+			sortFilter = new JsonObject();
+			sortFilter.put("__time", -1);
 
 			findOptions = new FindOptions();
 			findOptions.setFields(attributeFilter);
+			findOptions.setSort(sortFilter);
 			mongoFind(api, state, COLLECTION, query, findOptions, message);
 			break;
 
@@ -674,16 +680,22 @@ public class SearchVerticle extends AbstractVerticle {
 		case 7:
 			api="search";
 			attributeFilter.put("_id", 0);
+			sortFilter = new JsonObject();
+			sortFilter.put("__time", -1);
 			findOptions = new FindOptions();
 			findOptions.setFields(attributeFilter);
+			findOptions.setSort(sortFilter);
 			mongoFind(api, state, COLLECTION, query, findOptions, message);
 			break;
 
 		case 8:
 			api="search";
 			attributeFilter.put("_id", 0);
+			sortFilter = new JsonObject();
+			sortFilter.put("__time", -1);
 			findOptions = new FindOptions();
 			findOptions.setFields(attributeFilter);
+			findOptions.setSort(sortFilter);
 			mongoFind(api, state, COLLECTION, query, findOptions, message);
 			break;
 
