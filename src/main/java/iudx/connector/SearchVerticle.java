@@ -92,9 +92,9 @@ public class SearchVerticle extends AbstractVerticle {
 	    } 
 	    
 		mongoconfig		= 	new JsonObject()
-						//.put("username", database_user)
-						//.put("password", database_password)
-						//.put("authSource", auth_database)
+						.put("username", database_user)
+						.put("password", database_password)
+						.put("authSource", auth_database)
 						.put("host", database_host)
 						.put("port", database_port)
 						.put("db_name", database_name);
@@ -441,9 +441,17 @@ public class SearchVerticle extends AbstractVerticle {
 					String[] attr_arr = attribute_value.split(",");
 					query.put("$expr",new JsonObject()
 										.put("$and",new JsonArray().add(new JsonObject()
-													.put("$gt",new JsonArray().add(new JsonObject().put("$toDouble","$"+attribute_name)).add(getDoubleFromS(attr_arr[0]))))
+													.put("$gt",new JsonArray().add(new JsonObject().put("$convert", new JsonObject().put("input","$"+attribute_name)
+																													.put("to","double")
+																													.put("onError","No numeric value available (NA/Unavailable)")
+																													.put("onNull","No value available")))
+																				.add(getDoubleFromS(attr_arr[0]))))
 													.add(new JsonObject()
-															.put("$lt",new JsonArray().add(new JsonObject().put("$toDouble","$"+attribute_name)).add(getDoubleFromS(attr_arr[1]))))));
+															.put("$lt",new JsonArray().add(new JsonObject().put("$convert", new JsonObject().put("input","$"+attribute_name)
+																													.put("to","double")
+																													.put("onError","No numeric value available (NA/Unavailable)")
+																													.put("onNull","No value available")))
+																					.add(getDoubleFromS(attr_arr[1]))))));
 
 					break;
 
@@ -518,10 +526,14 @@ public class SearchVerticle extends AbstractVerticle {
   	query.put("$expr", new JsonObject()
 						.put(comparisonOp,new JsonArray()
 									.add(new JsonObject()
-											.put("$toDouble","$"+attrName))
+											.put("$convert", new JsonObject().put("input","$"+attrName)
+																.put("to","double")
+																.put("onError","No numeric value available (NA/Unavailable)")
+																.put("onNull","No value available")))
 									.add(attrValue)));
   	return query;
   }
+
 
   /**
    * Performs Mongo-GeoIntersects operation
@@ -752,6 +764,7 @@ public class SearchVerticle extends AbstractVerticle {
 								j.remove(hidden);
 							}
 						}
+
 						response.add(j);
 					}
 				}
@@ -762,6 +775,7 @@ public class SearchVerticle extends AbstractVerticle {
 				message.reply(response);
 
 			} else {
+				logger.info("Database query has FAILED!!!");
 				message.fail(1, "item-not-found");
 			}
 		});
