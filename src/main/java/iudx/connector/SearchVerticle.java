@@ -11,12 +11,12 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
-import java.util.Calendar;
-import java.util.Properties;
-import java.util.TimeZone;
+import java.util.*;
 
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.eventbus.Message;
+import io.vertx.core.file.FileSystem;
+import io.vertx.core.json.Json;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.logging.Logger;
@@ -60,7 +60,10 @@ public class SearchVerticle extends AbstractVerticle {
     private String[] coordinatesArr;
     private JsonArray coordinates;
     private JsonArray expressions;
-
+    private HashMap<String, Double> frequencyOfEmitting;
+	Set<String> itemsWithProviderName = new HashSet<String>();
+	Set<String> items = new HashSet<String>();
+	ItemsSingleton itemsSingleton;
 	@Override
 	public void start() throws Exception {
 		logger.info("Search Verticle started!");
@@ -115,6 +118,26 @@ public class SearchVerticle extends AbstractVerticle {
 		df = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"); 
 		df.setTimeZone(tz);
 
+		frequencyOfEmitting=new HashMap<>();
+		frequencyOfEmitting.put("aqm-bosch-climo", 0.25);
+		frequencyOfEmitting.put("flood-sensor",0.25);
+		frequencyOfEmitting.put("wifi-hotspot",0.25);
+		frequencyOfEmitting.put("streetlight-feeder-sree",0.25);
+		frequencyOfEmitting.put("pune-itms",0.02);
+		//frequencyOfEmitting.put("tomtom",0.25);
+		//frequencyOfEmitting.put("safetipin",0.67);
+		//frequencyOfEmitting.put("changebhai",0.67);
+		frequencyOfEmitting.put("pune-iitm-aqi",1d);
+		frequencyOfEmitting.put("pune-iitm-forecast",1d);
+
+		itemsSingleton=ItemsSingleton.getInstance();
+		itemsWithProviderName=itemsSingleton.getItems();
+		for(String s: itemsWithProviderName){
+			String s1[]=s.split("/");
+			String s2=s1[2]+"/"+s1[3]+"/"+s1[4];
+			items.add(s2);
+		}
+		logger.info("(SEARCH VERTICLE)**** Items Set contains "+items.size()+ " items");
 	}
 
 	private void search(Message<Object> message) {
@@ -161,10 +184,14 @@ public class SearchVerticle extends AbstractVerticle {
 		finalQuery = new JsonObject();
 		resourceQuery = new JsonObject();
 		isotime = new JsonObject();
-		resource_group_id = request.getString("resource-group-id");
-		resource_id = request.getString("resource-id");
-		resourceQuery.put("__resource-id",resource_id);
-		resourceQuery.put("__resource-group",resource_group_id);
+		try{
+			resource_group_id = request.getString("resource-group-id");
+			resourceQuery.put("__resource-group",resource_group_id);
+			resource_id = request.getString("resource-id");
+			resourceQuery.put("__resource-id",resource_id);
+		}catch (Exception e){
+			logger.error("Error: "+ e.getMessage());
+		}
 		geo_attribute_query = false;
 		
 		if(resource_group_id.equalsIgnoreCase("pune-itms")) {
@@ -176,7 +203,12 @@ public class SearchVerticle extends AbstractVerticle {
 		switch (state) {
 		case 1:
 			options = request.getString("options");
-			return resourceQuery;
+			if(!(request.containsKey("group")))
+				return resourceQuery;
+			else{
+				query.put("__resource-group",resource_group_id);
+				return query;
+			}
 
 		case 2:
 			options = request.getString("options");
@@ -252,7 +284,7 @@ public class SearchVerticle extends AbstractVerticle {
 				isotime.put("$gte", startDateTime);
 				isotime.put("$lte", endDateTime);
 				timeQuery.put("__time", isotime);
-				
+
 				expressions.add(resourceQuery).add(query).add(timeQuery);
 				finalQuery.put("$and", expressions);
 			}
@@ -265,6 +297,11 @@ public class SearchVerticle extends AbstractVerticle {
 			System.out.println("FINAL QUERY: " + finalQuery.toString());
 		}
 		return finalQuery;
+	}
+
+	private void statusForRG(String resource_group_id, Message<Object> message) {
+
+
 	}
 
 	double MetersToDecimalDegrees(double meters, double latitude) {
@@ -916,6 +953,10 @@ public class SearchVerticle extends AbstractVerticle {
 
 			else if (options.contains("status")) {
 				api = "status";
+				if(request_body.containsKey("group") && request_body.getBoolean("group")){
+					String resGroupName=request_body.getString("resource-group-id");
+					mongoAggStatus(resGroupName, COLLECTION, query, message);
+				}else
 				mongoFind(api, state, COLLECTION, query, findOptions, message);
 			}
 
@@ -1042,11 +1083,112 @@ public class SearchVerticle extends AbstractVerticle {
 		}
 	}
 
+	private void mongoAggStatus(String resGroupName, String COLLECTION, JsonObject query, Message<Object> message) {
+		double requiredFreq=frequencyOfEmitting.get(resGroupName);
+		double maxTime=frequencyOfEmitting.get(resGroupName)*100;
+		String currentTimeISO = df.format(Calendar.getInstance().getTime());
+		Instant currentInstant= Instant.parse(currentTimeISO);
+		Instant queryMinTime=currentInstant.minus(Duration.ofHours((long)maxTime));
+		Set<String> idFromGroup= new HashSet<>();
+
+		for(String item: items){
+			if(item.matches("(.*)"+resGroupName+"(.*)"))
+				idFromGroup.add(item);
+		}
+
+		logger.info("(SEARCH VERTILCE)**** Items in Group contains "+idFromGroup.size()+" items");
+		int batchSize=idFromGroup.isEmpty()?485:idFromGroup.size();
+
+		JsonObject matchStage=new JsonObject()
+				.put("$match", new JsonObject()
+								.put("__resource-group",resGroupName)
+								.put("__time", new JsonObject()
+												.put("$gt",new JsonObject()
+															.put("$date",queryMinTime))));
+  		JsonObject sortStage=new JsonObject()
+				.put("$sort", new JsonObject()
+								.put("__time",-1));
+
+  		JsonObject groupStage=new JsonObject()
+				.put("$group", new JsonObject()
+									.put("_id","$__resource-id")
+									.put("LUT", new JsonObject()
+												.put("$first","$__time")));
+  		JsonArray aggPipeline=new JsonArray()
+				.add(matchStage)
+				.add(sortStage)
+				.add(groupStage);
+		JsonObject aggregationCommand=new JsonObject()
+				.put("aggregate", COLLECTION)
+				.put("pipeline",aggPipeline)
+				.put("cursor", new JsonObject().put("batchSize",batchSize));
+
+		logger.info("Tis Aggregation Query "+ aggregationCommand.toString());
+		mongo.runCommand("aggregate", aggregationCommand, res->{
+			if(res.succeeded() && !idFromGroup.isEmpty()) {
+				Set<String> itemsFromDB = new HashSet();
+				JsonArray result = res.result().getJsonObject("cursor").getJsonArray("firstBatch");
+				JsonArray response = new JsonArray();
+				if(!result.isEmpty()) {
+					DateTimeFormatter format = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS[XXX][X]");
+					for (Object o : result) {
+						JsonObject j = (JsonObject) o;
+						JsonObject status = new JsonObject();
+						String res_name = j.getString("_id");
+						JsonObject lastUpdatedTime = j.getJsonObject("LUT");
+						String time = lastUpdatedTime.getString("$date");
+						LocalDateTime sensedDateTime = null;
+						try {
+							sensedDateTime = LocalDateTime.parse(time, format);
+						} catch (Exception ex) {
+							status.put(res_name, "date-issue");
+							response.add(status);
+							message.reply(response);
+							break;
+						}
+						LocalDateTime currentDateTime = LocalDateTime.now(ZoneOffset.UTC);
+						long timeDifference = Duration.between(sensedDateTime, currentDateTime).toHours();
+
+
+						itemsFromDB.add(res_name);
+						if (timeDifference <= requiredFreq * 8) {
+							status.put(res_name, "live");
+						} else if (timeDifference > requiredFreq * 8 && timeDifference <= requiredFreq * 24) {
+							status.put(res_name, "recently-live");
+						} else if (timeDifference > requiredFreq * 24 && timeDifference <= requiredFreq * 48) {
+							status.put(res_name, "recently-active");
+						} else {
+							status.put(res_name, "down");
+						}
+						response.add(status);
+					}
+
+					logger.info("Status (Resource Group) aggregation query was successful with "+ response.size()+" documents returned.");
+				}
+				else{
+					logger.info("Aggregation for Status API: The result is empty");
+				}
+				idFromGroup.removeAll(itemsFromDB);
+				for (String s : idFromGroup) {
+					JsonObject status = new JsonObject();
+					status.put(s, "down");
+					response.add(status);
+				}
+				message.reply(response);
+			}
+			else{
+				logger.error("Database query has FAILED!!! "+ res.cause());
+				message.fail(1, "item-not-found");
+			}
+
+		});
+	}
+
 	private void mongoFind(String api, int state, String COLLECTION, JsonObject query, FindOptions findOptions,
 			Message<Object> message) {
 		String[] hiddenFields = { "__resource-id", "__time", "__geoJsonLocation", "_id", "__resource-group" };
 		JsonObject requested_body = new JsonObject(message.body().toString());
-		final long starttime = System.currentTimeMillis(); 
+		final long starttime = System.currentTimeMillis();
 		mongo.findWithOptions(COLLECTION, query, findOptions, database_response -> {
 			if (database_response.succeeded()) {
 				JsonArray response = new JsonArray();
@@ -1068,21 +1210,20 @@ public class SearchVerticle extends AbstractVerticle {
 						}
 						LocalDateTime currentDateTime = LocalDateTime.now(ZoneOffset.UTC);
 						long timeDifference = Duration.between(sensedDateTime, currentDateTime).toHours();
-
+/***
 						logger.info("Last Status Update was at : " + sensedDateTime.toString());
 						logger.info("Current Time is : " + currentDateTime.toString());
 						logger.info("Time Difference is : " + timeDifference);
-
-						if (timeDifference <= 2) {
-							status.put("status", "live");
-						} else if (timeDifference > 2 && timeDifference <= 6) {
-							status.put("status", "recently-live");
-						} else if (timeDifference > 6 && timeDifference <= 12) {
-							status.put("status", "recently-active");
-						} else {
-							status.put("status", "down");
-						}
-
+**/
+							if (timeDifference <= 2) {
+								status.put("status", "live");
+							} else if (timeDifference > 2 && timeDifference <= 6) {
+								status.put("status", "recently-live");
+							} else if (timeDifference > 6 && timeDifference <= 12) {
+								status.put("status", "recently-active");
+							} else {
+								status.put("status", "down");
+							}
 						response.add(status);
 
 					}
