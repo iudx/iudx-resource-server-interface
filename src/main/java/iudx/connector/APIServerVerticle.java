@@ -20,6 +20,8 @@ import javax.net.ssl.SSLPeerUnverifiedException;
 
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Future;
+import io.vertx.core.Launcher;
+import io.vertx.core.MultiMap;
 import io.vertx.core.eventbus.DeliveryOptions;
 import io.vertx.core.file.FileSystem;
 import io.vertx.core.http.ClientAuth;
@@ -36,6 +38,7 @@ import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
 import io.vertx.ext.web.handler.BodyHandler;
 import io.vertx.ext.web.handler.CorsHandler;
+import iudx.connector.ngsild.QueryMapper;
 
 public class APIServerVerticle extends AbstractVerticle {
 
@@ -44,6 +47,7 @@ public class APIServerVerticle extends AbstractVerticle {
 	private ClientAuth clientAuth ;
 	private final int port = 443;
 	private final String basepath = "/resource-server/pscdcl/v1";
+	private final String ngsildBasePath="/ngsi-ld/v1";
 	private String event, api;
 	private HashMap<String, String> upstream;
 	int state;
@@ -84,6 +88,10 @@ public class APIServerVerticle extends AbstractVerticle {
 	private String resource_group_id;
 	private String reply, time;
 	
+	public static void main(String[] args) {
+		Launcher.executeCommand("run", APIServerVerticle.class.getName());
+	}
+	
 	@Override
 	public void start() {
 
@@ -121,6 +129,10 @@ public class APIServerVerticle extends AbstractVerticle {
 		router.delete(basepath + "/subscriptions/:subId").handler(this::deleteSubscription);
 
 		router.put(basepath + "/subscriptions/:subId").handler(this::updateSubscription);
+		
+		
+		router.put(ngsildBasePath+"/entities").handler(this::handleNGSILDEntityQuery);
+		router.put(ngsildBasePath+"/temporal/entities").handler(this::handleNGSILDTemporalQuery);
 
 		Properties prop = new Properties();
 	    InputStream input = null;
@@ -208,6 +220,37 @@ public class APIServerVerticle extends AbstractVerticle {
 		df = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"); 
 		df.setTimeZone(tz);
 		
+	}
+	
+	
+	private void handleNGSILDEntityQuery(RoutingContext routingContext) {
+		QueryMapper queryMapper=new QueryMapper();
+		HttpServerResponse response = routingContext.response();
+		MultiMap params=routingContext.queryParams();
+		DeliveryOptions options = new DeliveryOptions();
+		String event="search";
+		
+		JsonObject requested_data=queryMapper.getIUDXQuery(params);
+		requested_data.put("options", "latest");
+		options.addHeader("state", Integer.toString(state));
+		options.addHeader("options", "latest");
+		
+		publishEvent(event, requested_data, options, response);
+		
+	}
+	
+	
+	private void handleNGSILDTemporalQuery(RoutingContext routingContext) {
+		QueryMapper queryMapper=new QueryMapper();
+		HttpServerResponse response = routingContext.response();
+		MultiMap params=routingContext.queryParams();
+		DeliveryOptions options = new DeliveryOptions();
+		String event="search";
+		
+		JsonObject requested_data=queryMapper.getIUDXQuery(params);
+		options.addHeader("state", Integer.toString(state));
+		
+		publishEvent(event, requested_data, options, response);
 	}
 
 	private void search(RoutingContext routingContext) {
