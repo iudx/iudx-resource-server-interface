@@ -21,40 +21,27 @@ public class QueryMapper {
 					this.mapperDataTypeHelper(entry.getKey(), entry));
 		});
 
-		if (paramsMap.contains("timerel")
-				&& paramsMap.get("timerel").equalsIgnoreCase("between")) {
-			rootNode.put("trelation", "during");
-			rootNode.put("time", paramsMap.get("time") + "/" + paramsMap.get("endtime"));
-
+		if (paramsMap.contains("timerel")) {
+			if (paramsMap.get("timerel").equalsIgnoreCase("between")) {
+				rootNode.put("TRelation", "during");
+				rootNode.put("time", paramsMap.get("time") + "/" + paramsMap.get("endtime"));
+			}
+		} else {
+			rootNode.put("options", "latest");
 		}
+
 		System.out.println(rootNode);
 		return rootNode;
 	}
 
-	public static void main(String[] args) {
-
-		MultiMap map = MultiMap.caseInsensitiveMultiMap();
-		map.add("id", "123");
-		map.add("attrs", "temprature,astavs,asyst");
-		map.add("type", "Vehicle");
-		map.add("coordinates",
-				"%5B%5B%5B8.684628009796143%2C49.406062179606515%5D%2C%5B8.685507774353027%2C49.4062262372493%5D%2C%5B8.68545413017273%2C49.40634491690448%5D%2C%5B8.684579730033875%2C49.40617736907259%5D%2C%5B8.684628009796143%2C49.406062179606515%5D%5D%5D");
-		map.add("geometry", "polygon");
-		map.add("timerel", "after");
-		map.add("time", "2017-07-29T12:00:04");
-		map.add("endtime", "2017-07-30T12:00:04");
-
-		QueryMapper qm = new QueryMapper();
-		qm.getIUDXQuery(map);
-	}
-
 	private Object mapperDataTypeHelper(String key, Map.Entry<String, String> entry) {
 		if (key.equalsIgnoreCase("id") || key.equalsIgnoreCase("attrs")) {
-			JsonArray array = new JsonArray();
-			List<String> list = Arrays.stream(entry.getValue().split(","))
-					.collect(Collectors.toList());
-			list.forEach(s -> array.add(s));
-			return array;
+			/*
+			 * JsonArray array = new JsonArray(); List<String> list =
+			 * Arrays.stream(entry.getValue().split(",")) .collect(Collectors.toList());
+			 * list.forEach(s -> array.add(s)); return array;
+			 */
+			return entry.getValue();
 		}
 		else if (key.equalsIgnoreCase("geometry")) {
 			return entry.getValue();
