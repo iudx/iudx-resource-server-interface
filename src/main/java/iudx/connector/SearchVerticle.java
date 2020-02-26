@@ -461,7 +461,8 @@ public class SearchVerticle extends AbstractVerticle {
 	private JsonObject constructGeoCircleQuery(JsonObject request) {
 		double latitude = Double.parseDouble(request.getString("lat"));
 		double longitude = Double.parseDouble(request.getString("lon"));
-		double rad = MetersToDecimalDegrees(Double.parseDouble(request.getString("radius")), latitude);
+		double rad = (Double.parseDouble(request.getString("radius")) / (6378.1*1000));
+		//double rad = MetersToDecimalDegrees(Double.parseDouble(request.getString("radius")), latitude);
 		boolean attribute = false, temporal = false;
 
 		query = new JsonObject();
@@ -470,7 +471,7 @@ public class SearchVerticle extends AbstractVerticle {
         finalGeoQuery = new JsonObject();
         expressions = new JsonArray();
         
-		query.put("__geoJsonLocation", new JsonObject().put("$geoWithin", new JsonObject().put("$center",
+		query.put("__geoJsonLocation", new JsonObject().put("$geoWithin", new JsonObject().put("$centerSphere",
 				new JsonArray().add(new JsonArray().add(longitude).add(latitude)).add(rad))));
 
         if (request.containsKey("attribute-name") && request.containsKey("attribute-value")){
