@@ -50,7 +50,6 @@ public class QueryMapper {
 		
 		if(paramsMap.contains("q")) {
 			String qFilter=paramsMap.get("q");
-			//rootNode= handleAttrFilterQuery(qFilter,rootNode);
 			String[] options=qFilter.split(";");
 			Arrays.stream(options).forEach(e->{
 				List<String> queryTerms=getQueryTerms(e);
@@ -62,26 +61,6 @@ public class QueryMapper {
 		
 		System.out.println(rootNode);
 		return rootNode;
-	}
-	
-	
-	public static void main(String[] args) {
-		//System.out.println(QuerySpecialCharacter.getName4Value("=="));
-		/*
-		 * QueryMapper qm=new QueryMapper(); List<String>
-		 * s=qm.getQueryTerms("temprature>=30"); s.forEach(System.out::println);
-		 */
-		
-		
-		MultiMap map=MultiMap.caseInsensitiveMultiMap();
-		map.add("id", "abc");
-		map.add("georel","near;maxDistance=2000");
-		map.add("geometry","polygon");
-		map.add("coordinates", "%5B%5B%5B8.684628009796143%2C49.406062179606515%5D%2C%5B8.685507774353027%2C49.4062262372493%5D%2C%5B8.68545413017273%2C49.40634491690448%5D%2C%5B8.684579730033875%2C49.40617736907259%5D%2C%5B8.684628009796143%2C49.406062179606515%5D%5D%5D");
-		map.add("q","temprature>=20;");
-		QueryMapper qm=new QueryMapper();
-		qm.getIUDXQuery(map);
-		
 	}
 	
 	private List<String> getQueryTerms(String queryTerms) {
