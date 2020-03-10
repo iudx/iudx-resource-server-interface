@@ -204,7 +204,7 @@ public class SearchVerticle extends AbstractVerticle {
             break;
 
         case 8:
-            query = constructGeoPoly_LineQuery(request);
+            query = constructGeoPoly_Line_PointQuery(request);
             break;
         
         case 9:
@@ -212,7 +212,7 @@ public class SearchVerticle extends AbstractVerticle {
             break;
         
         case 10:
-            query = constructGeoPoly_LineQuery(request);
+            query = constructGeoPoly_Line_PointQuery(request);
             break;
 
 		case 11:
@@ -459,9 +459,15 @@ public class SearchVerticle extends AbstractVerticle {
 	}
 
 	private JsonObject constructGeoCircleQuery(JsonObject request) {
-		double latitude = Double.parseDouble(request.getString("lat"));
-		double longitude = Double.parseDouble(request.getString("lon"));
-		double rad = (Double.parseDouble(request.getString("radius")) / (6378.1*1000));
+		double latitude=0.0, longitude=0.0, rad;
+		String relation="intersects";
+		try{
+			latitude = request.containsKey("lat")?Double.parseDouble(request.getString("lat")):0.0;
+			longitude = request.containsKey("lon")?Double.parseDouble(request.getString("lon")):0.0;
+			relation=request.getString("relation");
+		}catch (Exception e){
+			logger.info("SEARCH_VERTCLE/constructGeoCircleQuery: "+ e.getMessage());
+		}
 		//double rad = MetersToDecimalDegrees(Double.parseDouble(request.getString("radius")), latitude);
 		boolean attribute = false, temporal = false;
 
@@ -470,9 +476,27 @@ public class SearchVerticle extends AbstractVerticle {
         temporalQuery = new JsonObject();
         finalGeoQuery = new JsonObject();
         expressions = new JsonArray();
-        
-		query.put("__geoJsonLocation", new JsonObject().put("$geoWithin", new JsonObject().put("$centerSphere",
-				new JsonArray().add(new JsonArray().add(longitude).add(latitude)).add(rad))));
+
+        if ("within".equalsIgnoreCase(relation)){
+        	/**
+			 * Query GeoWithin format-
+			 * {__geoJsonLocation: {$geoWithin: {$centreSphere: [lon,lat,rad]}}}
+			 * */
+			rad = request.containsKey("radius")?(Double.parseDouble(request.getString("radius")) / (6378.1*1000)):0;
+        	query.put("__geoJsonLocation", new JsonObject().put("$geoWithin", new JsonObject().put("$centerSphere",
+					new JsonArray().add(new JsonArray().add(longitude).add(latitude)).add(rad))));
+        }
+        else if("intersects".equalsIgnoreCase(relation)){
+        	/**
+			 * Query NearSphere format-
+			 * {__geoJsonLocation: {$nearSphere: {$geometry: {type: Point, coordinates: [lon,lat]}, $maxDistance: rad}}}
+			 * */
+			rad = request.containsKey("radius")?(Double.parseDouble(request.getString("radius"))):0;
+        	query.put("__geoJsonLocation", new JsonObject().put("$nearSphere",
+					new JsonObject().put("$geometry",new JsonObject().put("type","Point")
+													.put("coordinates",new JsonArray().add(longitude).add(latitude)))
+							.put("$maxDistance",rad)));
+		}
 
         if (request.containsKey("attribute-name") && request.containsKey("attribute-value")){
 			attributeQuery = constructAttributeQuery(request);
@@ -579,7 +603,7 @@ public class SearchVerticle extends AbstractVerticle {
         return finalGeoQuery;
     }
 
-    private JsonObject constructGeoPoly_LineQuery(JsonObject request){
+    private JsonObject constructGeoPoly_Line_PointQuery(JsonObject request){
 
 		JsonObject geoQuery = new JsonObject();
 		expressions = new JsonArray();
@@ -593,8 +617,10 @@ public class SearchVerticle extends AbstractVerticle {
         if(request.containsKey("geometry")){
             if(request.getString("geometry").toUpperCase().contains("Polygon".toUpperCase()))
                 geometry = "Polygon";
-        else if(request.getString("geometry").toUpperCase().contains("lineString".toUpperCase()))
-            geometry = "LineString";
+        	else if(request.getString("geometry").toUpperCase().contains("lineString".toUpperCase()))
+            	geometry = "LineString";
+        	else if(request.getString("geometry").toUpperCase().contains("Point".toUpperCase()))
+				geometry = "Point";
         }
 
         relation = request.containsKey("relation")?request.getString("relation").toLowerCase():"intersects";
@@ -613,7 +639,7 @@ public class SearchVerticle extends AbstractVerticle {
                     }
                     coordinates.add(extRing);
                     System.out.println("QUERY: " + coordinates.toString());
-                    query = buildGeoQuery(geometry,coordinates,relation);
+                    geoQuery = buildGeoQuery(geometry,coordinates,relation);
                     break;
 
                 case "LineString":
@@ -625,8 +651,17 @@ public class SearchVerticle extends AbstractVerticle {
                         points.add(getDoubleFromS(coordinatesArr[i+1])).add(getDoubleFromS(coordinatesArr[i]));
                         coordinates.add(points);
                     }
-                    query = buildGeoQuery(geometry,coordinates,relation);
+                    geoQuery = buildGeoQuery(geometry,coordinates,relation);
                     break;
+
+                case "Point":
+					coordinatesS = request.getString("geometry");
+					coordinatesS = coordinatesS.replaceAll("[a-zA-Z()]","");
+					coordinatesArr = coordinatesS.split(",");
+					coordinates.add(getDoubleFromS(coordinatesArr[1])).add(getDoubleFromS(coordinatesArr[0]));
+					geoQuery=buildGeoQuery(geometry,coordinates,relation);
+					break;
+
 				default:
 					throw new IllegalStateException("Unexpected value: " + geometry);
 			}
@@ -634,7 +669,7 @@ public class SearchVerticle extends AbstractVerticle {
             geoQuery=null;
 
         query = geoQuery;
-        
+
 		if (request.containsKey("attribute-name") && request.containsKey("attribute-value")){
 			attributeQuery = constructAttributeQuery(request);
 			attribute = true;
@@ -668,7 +703,7 @@ public class SearchVerticle extends AbstractVerticle {
 		} else {
 			finalGeoQuery = query;
 		}
-        
+
         return finalGeoQuery;
     }
 
@@ -718,18 +753,18 @@ public class SearchVerticle extends AbstractVerticle {
 				case "propertyisbetween":
 					String[] attr_arr = attribute_value.split(",");
 					query.put("$expr",new JsonObject()
-										.put("$and",new JsonArray().add(new JsonObject()
-													.put("$gt",new JsonArray().add(new JsonObject().put("$convert", new JsonObject().put("input","$"+attribute_name)
-																													.put("to","double")
-																													.put("onError","No numeric value available (NA/Unavailable)")
-																													.put("onNull","No value available")))
-																				.add(getDoubleFromS(attr_arr[0]))))
-													.add(new JsonObject()
-															.put("$lt",new JsonArray().add(new JsonObject().put("$convert", new JsonObject().put("input","$"+attribute_name)
-																													.put("to","double")
-																													.put("onError","No numeric value available (NA/Unavailable)")
-																													.put("onNull","No value available")))
-																					.add(getDoubleFromS(attr_arr[1]))))));
+							.put("$and",new JsonArray().add(new JsonObject()
+									.put("$gt",new JsonArray().add(new JsonObject().put("$convert", new JsonObject().put("input","$"+attribute_name)
+											.put("to","double")
+											.put("onError","No numeric value available (NA/Unavailable)")
+											.put("onNull","No value available")))
+											.add(getDoubleFromS(attr_arr[0]))))
+									.add(new JsonObject()
+											.put("$lt",new JsonArray().add(new JsonObject().put("$convert", new JsonObject().put("input","$"+attribute_name)
+													.put("to","double")
+													.put("onError","No numeric value available (NA/Unavailable)")
+													.put("onNull","No value available")))
+													.add(getDoubleFromS(attr_arr[1]))))));
 
 					break;
 
@@ -763,17 +798,10 @@ public class SearchVerticle extends AbstractVerticle {
 
 		case "disjoint": break;
 
-		case "touches": query = searchGeoIntersects(geometry,coordinates);
-				break;
-
-		case "overlaps": query = searchGeoIntersects(geometry,coordinates);
-				 break;
-
-		case "crosses": query = searchGeoIntersects(geometry,coordinates);
-				break;
-
-		case "contains": break;
-
+		case "touches":
+		case "overlaps":
+		case "crosses":
+		case "contains":
 		case "intersects": query = searchGeoIntersects(geometry,coordinates);
 				            break;
 
@@ -879,6 +907,16 @@ public class SearchVerticle extends AbstractVerticle {
 							|| relation.equalsIgnoreCase("crosses")
 							|| relation.equalsIgnoreCase("intersects")
 							|| relation.equalsIgnoreCase("within") )){
+
+		return true;
+	}
+
+	else if(geometry.equalsIgnoreCase("point") && (relation.equalsIgnoreCase("equals")
+			||relation.equalsIgnoreCase("disjoint")
+			|| relation.equalsIgnoreCase("touches")
+			|| relation.equalsIgnoreCase("overlaps")
+			|| relation.equalsIgnoreCase("crosses")
+			|| relation.equalsIgnoreCase("intersects"))){
 
 		return true;
 	}
