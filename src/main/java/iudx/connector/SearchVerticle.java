@@ -134,6 +134,8 @@ public class SearchVerticle extends AbstractVerticle {
 			message.reply(query);
 		} else if(query.containsKey("time")) {
 			message.reply(query);
+		} else if(query.containsKey("geo-issue")) {
+			message.reply(query);
 		}
 		else {
 		JsonObject fields = new JsonObject();
@@ -230,7 +232,12 @@ public class SearchVerticle extends AbstractVerticle {
 		
 		else if(query.containsKey("allowed_number_of_days")) {
 			finalQuery = query;
+		} 
+		
+		else if(query.containsKey("geo-issue")) {
+			finalQuery = query;
 		}
+		
 		else {
 			expressions = new JsonArray();
 
@@ -460,22 +467,27 @@ public class SearchVerticle extends AbstractVerticle {
 
 	private JsonObject constructGeoCircleQuery(JsonObject request) {
 		double latitude=0.0, longitude=0.0, rad;
-		String relation="intersects";
-		try{
-			latitude = request.containsKey("lat")?Double.parseDouble(request.getString("lat")):0.0;
-			longitude = request.containsKey("lon")?Double.parseDouble(request.getString("lon")):0.0;
-			relation=request.getString("relation");
-		}catch (Exception e){
-			logger.info("SEARCH_VERTCLE/constructGeoCircleQuery: "+ e.getMessage());
-		}
-		//double rad = MetersToDecimalDegrees(Double.parseDouble(request.getString("radius")), latitude);
 		boolean attribute = false, temporal = false;
-
+		geometry = "circle";
 		query = new JsonObject();
         attributeQuery = new JsonObject();
         temporalQuery = new JsonObject();
         finalGeoQuery = new JsonObject();
-        expressions = new JsonArray();
+        expressions = new JsonArray(); 
+		try{
+			latitude = request.containsKey("lat")?Double.parseDouble(request.getString("lat")):0.0;
+			longitude = request.containsKey("lon")?Double.parseDouble(request.getString("lon")):0.0;
+			relation= request.containsKey("relation")?request.getString("relation"):"intersects";
+			boolean valid = validateRelation(geometry, relation); 
+			if (!valid) {
+				finalGeoQuery.put("geo-issue", "in-valid relation");
+				return finalGeoQuery;
+			}
+		}catch (Exception e){
+			logger.info("SEARCH_VERTICLE/constructGeoCircleQuery: "+ e.getMessage());
+			finalGeoQuery.put("geo-issue", "in-valid query");
+			return finalGeoQuery;
+		}
 
         if ("within".equalsIgnoreCase(relation)){
         	/**
@@ -503,7 +515,7 @@ public class SearchVerticle extends AbstractVerticle {
 			attribute = true;
 		}
 
-		if (request.containsKey("time") && request.containsKey("TRelation")) {
+		if (request.containsKey("time") && request.containsKey("TRelation")) { 
 			geo_attribute_query = true;
 			temporalQuery = constructTimeSeriesQuery(request);
 			if (temporalQuery.containsKey("allowed_number_of_days")) {
@@ -561,8 +573,10 @@ public class SearchVerticle extends AbstractVerticle {
             coordinates.add(temp);
             geoQuery = buildGeoQuery("Polygon",coordinates,relation);
         
-        } else
-            geoQuery=null;
+		} else {
+			finalGeoQuery.put("geo-issue", "in-valid query");
+			return finalGeoQuery;
+		}
 
         query=geoQuery;
         
@@ -621,6 +635,10 @@ public class SearchVerticle extends AbstractVerticle {
             	geometry = "LineString";
         	else if(request.getString("geometry").toUpperCase().contains("Point".toUpperCase()))
 				geometry = "Point";
+        	else {
+        		finalGeoQuery.put("geo-issue", "in-valid query");
+				return finalGeoQuery;
+        	}
         }
 
         relation = request.containsKey("relation")?request.getString("relation").toLowerCase():"intersects";
@@ -661,12 +679,11 @@ public class SearchVerticle extends AbstractVerticle {
 					coordinates.add(getDoubleFromS(coordinatesArr[1])).add(getDoubleFromS(coordinatesArr[0]));
 					geoQuery=buildGeoQuery(geometry,coordinates,relation);
 					break;
-
-				default:
-					throw new IllegalStateException("Unexpected value: " + geometry);
 			}
-        }else 
-            geoQuery=null;
+		} else {
+			finalGeoQuery.put("geo-issue", "in-valid query");
+			return finalGeoQuery;
+		}
 
         query = geoQuery;
 
@@ -921,6 +938,12 @@ public class SearchVerticle extends AbstractVerticle {
 		return true;
 	}
 
+	else if(geometry.equalsIgnoreCase("circle") && (relation.equalsIgnoreCase("within")
+			|| relation.equalsIgnoreCase("intersects"))){
+
+		return true;
+	}
+	
     else
 	   return false;
 
@@ -1083,7 +1106,7 @@ public class SearchVerticle extends AbstractVerticle {
 
 	private void mongoFind(String api, int state, String COLLECTION, JsonObject query, FindOptions findOptions,
 			Message<Object> message) {
-		String[] hiddenFields = { "__resource-id", "__time", "__geoJsonLocation", "_id", "__resource-group" };
+		String[] hiddenFields = { "__resource-id", "__time", "_id", "__resource-group" };
 		JsonObject requested_body = new JsonObject(message.body().toString());
 		final long starttime = System.currentTimeMillis(); 
 		mongo.findWithOptions(COLLECTION, query, findOptions, database_response -> {
