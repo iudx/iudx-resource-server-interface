@@ -4,6 +4,7 @@ package iudx.connector;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.DeploymentOptions;
 import io.vertx.core.Future;
+import io.vertx.core.Launcher;
 import io.vertx.core.Promise;
 import io.vertx.core.file.FileSystem;
 import io.vertx.core.json.JsonArray;
@@ -19,6 +20,11 @@ public class Connector extends AbstractVerticle {
 
 	public	final static Logger logger = LoggerFactory.getLogger(Connector.class);
 	private Set<String> items;
+	
+	public static void main(String[] args) {
+		Launcher.executeCommand("run", Connector.class.getName());
+	}
+	
 	@Override
 	public void start(Future<Void> startFuture)throws Exception
 	{
