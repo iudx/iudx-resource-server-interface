@@ -37,7 +37,7 @@ public class APIServerVerticle extends AbstractVerticle {
 	private HttpServer server;
 	private ClientAuth clientAuth ;
 	private final int port = 443;
-	private final String basepath = "/resource-server/pscdcl/v1";
+	private final String basepath = "/resource-server/vscl/v1";
 	private String event, api;
 	private HashMap<String, String> upstream;
 	int state;
@@ -144,7 +144,7 @@ public class APIServerVerticle extends AbstractVerticle {
 			iS.setItemGroups(itemGroups);
 			items=iS.getItems();
 			logger.info("Updated items list. Totally loaded " + items.size() + " items");
-
+			
 		    vertxFileSystem.readFile("download.json", readFile -> {
 		        if (readFile.succeeded()) {
 		        	JsonObject j = readFile.result().toJsonObject();
@@ -529,6 +529,8 @@ public class APIServerVerticle extends AbstractVerticle {
 	
 	private int decoderequest(JsonObject requested_data) { 
 
+		state = 0;
+
 		if (requested_data.containsKey("id")) {
 			id = requested_data.getString("id");
 			splitId = requested_data.getString("id").split("/");
@@ -543,10 +545,13 @@ public class APIServerVerticle extends AbstractVerticle {
 			requested_data.put("resource-group-id", resource_group);
 			requested_data.put("group",true);
 		}
-		state = 0;
-
+		System.out.println(requested_data);
+		System.out.println(api);
+		System.out.println(resource_group);
+		System.out.println(itemGroups);
+		
 		if(!items.contains(id)  && !itemGroups.contains(resource_group)) {
-			state = 0;
+			state = 1;
 		}
 
 		else if (api.equalsIgnoreCase("search") && requested_data.containsKey("options") 

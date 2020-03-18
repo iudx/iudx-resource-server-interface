@@ -8,15 +8,20 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
-import java.util.*;
+import java.util.Calendar;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Properties;
+import java.util.Set;
+import java.util.TimeZone;
 
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.eventbus.Message;
-import io.vertx.core.file.FileSystem;
-import io.vertx.core.json.Json;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.logging.Logger;
@@ -129,6 +134,15 @@ public class SearchVerticle extends AbstractVerticle {
 		//frequencyOfEmitting.put("changebhai",0.67);
 		frequencyOfEmitting.put("pune-iitm-aqi",1d);
 		frequencyOfEmitting.put("pune-iitm-forecast",1d);
+
+		// Varanasi Resource Groups
+		frequencyOfEmitting.put("varanasi-swm-vehicles",1d);
+		frequencyOfEmitting.put("varanasi-aqm",1d);
+		frequencyOfEmitting.put("varanasi-swm-vehicles",1d);
+		frequencyOfEmitting.put("varanasi-swm-wardwiseEmployeeAttendace",1d);
+		frequencyOfEmitting.put("varanasi-swm-workers",1d);
+		frequencyOfEmitting.put("varanasi-iudx-gis",1d);
+		frequencyOfEmitting.put("varanasi-citizen-app",1d);
 
 		itemsSingleton=ItemsSingleton.getInstance();
 		itemsWithProviderName=itemsSingleton.getItems();
@@ -953,11 +967,43 @@ public class SearchVerticle extends AbstractVerticle {
 
 			else if (options.contains("status")) {
 				api = "status";
+				String nowAsISO = ZonedDateTime.now( ZoneId.of("Asia/Kolkata") ).format( DateTimeFormatter.ISO_INSTANT );
+                allowed_number_of_days = 2;
+                instant = Instant.parse(nowAsISO);
+
+                startDateTime = new JsonObject();
+                startDateTime.put("$date", instant);
+
+                endInstant = instant.minus(Duration.ofDays(allowed_number_of_days));
+                endDateTime = new JsonObject();
+                endDateTime.put("$date", endInstant);
+
+                isotime.put("$gte", endDateTime);
+                isotime.put("$lte", startDateTime);
+
+                JsonObject timeQuery = new JsonObject();
+                timeQuery.put("__time", isotime);
+
+                System.out.println(timeQuery);
+                expressions = new JsonArray();
+                expressions.add(query).add(timeQuery);
+
+                finalQuery.put("$and", expressions);
+                attributeFilter.put("_id", 0);
+
+                sortFilter = new JsonObject();
+                sortFilter.put("__time", -1);
+
+                findOptions = new FindOptions();
+                findOptions.setFields(attributeFilter);
+                findOptions.setLimit(1);
+                findOptions.setSort(sortFilter);
+
 				if(request_body.containsKey("group") && request_body.getBoolean("group")){
 					String resGroupName=request_body.getString("resource-group-id");
 					mongoAggStatus(resGroupName, COLLECTION, query, message);
 				}else
-				mongoFind(api, state, COLLECTION, query, findOptions, message);
+				mongoFind(api, state, COLLECTION, finalQuery, findOptions, message);
 			}
 
 			break;
@@ -1130,7 +1176,7 @@ public class SearchVerticle extends AbstractVerticle {
 				JsonArray result = res.result().getJsonObject("cursor").getJsonArray("firstBatch");
 				JsonArray response = new JsonArray();
 				if(!result.isEmpty()) {
-					DateTimeFormatter format = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS[XXX][X]");
+					DateTimeFormatter format = DateTimeFormatter.ISO_DATE_TIME;
 					for (Object o : result) {
 						JsonObject j = (JsonObject) o;
 						JsonObject status = new JsonObject();
@@ -1192,7 +1238,16 @@ public class SearchVerticle extends AbstractVerticle {
 		mongo.findWithOptions(COLLECTION, query, findOptions, database_response -> {
 			if (database_response.succeeded()) {
 				JsonArray response = new JsonArray();
-				DateTimeFormatter format = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS[XXX][X]");
+				//DateTimeFormatter format = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS[XXX][X]");
+				DateTimeFormatter format = DateTimeFormatter.ISO_DATE_TIME;
+
+				if (database_response.result().isEmpty() && api.equalsIgnoreCase("status")) {
+					JsonObject status = new JsonObject();
+					status.put("status", "down");
+					response.add(status);
+					message.reply(response);
+				}
+				
 				for (JsonObject j : database_response.result()) {
 
 					if (api.equalsIgnoreCase("status")) {
@@ -1215,11 +1270,11 @@ public class SearchVerticle extends AbstractVerticle {
 						logger.info("Current Time is : " + currentDateTime.toString());
 						logger.info("Time Difference is : " + timeDifference);
 **/
-							if (timeDifference <= 2) {
+							if (timeDifference <= 8) {
 								status.put("status", "live");
-							} else if (timeDifference > 2 && timeDifference <= 6) {
+							} else if (timeDifference > 8 && timeDifference <= 24) {
 								status.put("status", "recently-live");
-							} else if (timeDifference > 6 && timeDifference <= 12) {
+							} else if (timeDifference > 24 && timeDifference <= 48) {
 								status.put("status", "recently-active");
 							} else {
 								status.put("status", "down");
