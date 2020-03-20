@@ -35,52 +35,41 @@ public class QueryMapper {
 			rootNode.put("options", "latest");
 		}
 
-		if (paramsMap.contains("georel")) {
-			String relation = paramsMap.get("georel");
-			if (relation.contains(";")) {
-				String rel[] = relation.split(";");
-				rootNode.put("relation", rel[0]);
-				String dist = rel[1].substring(rel[1].indexOf("=") + 1);
-				rootNode.put("distance", dist);
-			}
-			else {
-				rootNode.put("relation", relation);
-			}
-		}
-
 		if (paramsMap.contains("q")) {
 			String qFilter = paramsMap.get("q");
+			System.out.println("qFilter " + qFilter);
 			String[] options = qFilter.split(";");
+			System.out.println("options " + options);
 			Arrays.stream(options).forEach(e -> {
+				System.out.println(e);
 				List<String> queryTerms = getQueryTerms(e);
 				rootNode.put("attribute-name", queryTerms.get(0));
+				rootNode.put("attribute-value", queryTerms.get(2));
 				rootNode.put("comparison-operator",
 						QueryOperators.getName4Value(queryTerms.get(1)));
-				rootNode.put("attribute-value", queryTerms.get(2));
 			});
 		}
 
-		if (rootNode.containsKey("geometry") && rootNode.containsKey("coordinates")) {
-			String coordinates = rootNode.getString("coordinates").replaceAll("\\[|\\]",
+		if (paramsMap.contains("geometry") && paramsMap.contains("coordinates") && paramsMap.contains("georel")) {
+			String coordinates = paramsMap.get("coordinates").replaceAll("\\[|\\]",
 					"");
-			String geomType = rootNode.getString("geometry");
-			if (geomType.equalsIgnoreCase("Polygon")) {
+			String geomType = paramsMap.get("geometry");
+			String georel = paramsMap.get("georel");
+			if (geomType.equalsIgnoreCase("polygon")) {
 				String geom = geomType + "((" + coordinates + "))";
 				rootNode.put("geometry", geom);
-				rootNode.remove("coordinates");
+				rootNode.put("georel", georel);
 			}
 			else if (geomType.equalsIgnoreCase("LineString")
 					|| geomType.equalsIgnoreCase("MultiLineString")) {
 				String geom = geomType + "(" + coordinates + ")";
 				rootNode.put("geometry", geom);
-				rootNode.remove("coordinates");
+				rootNode.put("georel", georel);
 			}
 			else if (geomType.equalsIgnoreCase("point")) {
 				//handle probable circle geom here.
 			}
 		}
-
-		System.out.println(rootNode);
 		return rootNode;
 	}
 
@@ -89,13 +78,20 @@ public class QueryMapper {
 		int length = queryTerms.length();
 		int startIndex = 0;
 		boolean specialCharFound = false;
+		char[] allowedSpecialCharacter = ">=<!".toCharArray();
 		for (int i = 0; i < length; i++) {
 			Character c = queryTerms.charAt(i);
-			if (!(Character.isLetter(c) || Character.isDigit(c)) && !specialCharFound) {
-				qTerms.add(queryTerms.substring(startIndex, i));
-				startIndex = i;
-				specialCharFound = true;
 
+			if (!(Character.isLetter(c) || Character.isDigit(c)) && !specialCharFound) {
+				for(int j=0;j<allowedSpecialCharacter.length;j++) {
+					if (allowedSpecialCharacter[j] == c) {
+						qTerms.add(queryTerms.substring(startIndex, i));
+						startIndex = i;
+						specialCharFound = true;
+					} else {
+						System.out.println("Ignore " + c.toString());				
+					}
+				}
 			}
 			else {
 				if (specialCharFound && (Character.isLetter(c) || Character.isDigit(c))) {
@@ -193,8 +189,8 @@ enum QueryOperators {
 	propertyisnotequalto("!="),
 	propertyisgreaterthan(">"),
 	propertyislessthan("<"),
-	propertyislessthanorequalto("<="),
-	propertyisgreaterthanorequalto(">="),
+	propertyislessthanequalto("<="),
+	propertyisgreaterthanequalto(">="),
 	propertyislike("like");
 
 	private final String value;
@@ -208,6 +204,7 @@ enum QueryOperators {
 	}
 
 	public static String getName4Value(String value) {
+		System.out.println(value);
 		for (QueryOperators element : QueryOperators.values()) {
 			if (element.value.equalsIgnoreCase(value)) {
 				return element.name();
