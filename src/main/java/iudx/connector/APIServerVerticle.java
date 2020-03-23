@@ -660,13 +660,24 @@ public class APIServerVerticle extends AbstractVerticle {
 		if (requested_data.containsKey("id")) {
 			id = requested_data.getString("id");
 			splitId = requested_data.getString("id").split("/");
-			resource_group = splitId[3];
-			resource_id = splitId[2] + "/" + splitId[3] + "/" + splitId[4];
-			requested_data.put("resource-group-id", resource_group);
-			requested_data.put("resource-id", resource_id);
+			if(splitId.length == 5){
+				//resourceItem
+				resource_group = splitId[3];
+				resource_id = splitId[2] + "/" + splitId[3] + "/" + splitId[4];
+				requested_data.put("resource-group-id", resource_group);
+				requested_data.put("resource-id", resource_id);
+			}else if(splitId.length == 2){
+				//resourceGroup
+				//reusing resource-id key for group apis
+				//needs better logic and optimization
+				resource_group = splitId[1];
+				requested_data.put("resource-group-id", resource_group);
+				requested_data.put("resource-id", "group");
+			}
 			requested_data.remove("id");
 		}
 		else if (requested_data.containsKey("group")){
+			//for status api
 			resource_group=requested_data.getString("group");
 			requested_data.put("resource-group-id", resource_group);
 			requested_data.put("group",true);
