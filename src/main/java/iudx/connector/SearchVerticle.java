@@ -1230,7 +1230,6 @@ public class SearchVerticle extends AbstractVerticle {
   		JsonObject projectStage=new JsonObject()
 				.put("$project", new JsonObject()
 						.put("_id",0)
-						.put("__resource-id",0)
 						.put("__time",0));
   		JsonObject replacementStage=new JsonObject()
 				.put("$replaceRoot", new JsonObject()
