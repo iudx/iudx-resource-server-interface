@@ -1,12 +1,10 @@
 package iudx.connector.ngsild;
 
-import java.io.UnsupportedEncodingException;
-import java.net.URLDecoder;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 import io.vertx.core.MultiMap;
@@ -15,31 +13,15 @@ import io.vertx.core.json.JsonObject;
 
 public class QueryMapper {
 	
+	private static final Logger logger=Logger.getLogger(QueryMapper.class.getName());
 	
-	public static void main(String[] args) {
-		MultiMap map = MultiMap.caseInsensitiveMultiMap();
-		map.add("id",
-				"rbccps.org/aa9d66a000d94a78895de8d4c0b3a67f3450e531/pudx-resource-server/pune-itms/pune-itms-live");
-		map.add("timerel", "between");
-		map.add("time", "2020-01-23T14:20:00Z");
-		map.add("endtime", "2020-01-23T14:40:00Z");
-		map.add("georel", "near;maxDistance==360");
-		map.add("geometry", "point");
-		map.add("coordinates","%5B8.684783577919006%2C49.406131991436396%5D");
-		//map.add("coordinates","%5B%5B%5B8.684628009796143%2C49.406062179606515%5D%2C%5B8.685507774353027%2C49.4062262372493%5D%2C%5B8.68545413017273%2C49.40634491690448%5D%2C%5B8.684579730033875%2C49.40617736907259%5D%2C%5B8.684628009796143%2C49.406062179606515%5D%5D%5D");
-		map.add("q", "LIGHT>2900");
-		map.add("attrs", "CURRENT_STATUS,ROUTE_ID");
-		QueryMapper qm = new QueryMapper();
-		//qm.getIUDXQuery(map);
-		System.out.println(qm.getIUDXQuery(map));
-
-	}
-
 	public JsonObject getIUDXQuery(MultiMap paramsMap) {
+		logger.info("query mapper function parameters received : \n"+paramsMap);
 		JsonObject rootNode = new JsonObject();
 		paramsMap.forEach(entry -> {
-			if (entry.getKey().equals("q"))
+			if (entry.getKey().equals("q") || entry.getKey().equalsIgnoreCase("geoproperty") || entry.getKey().equalsIgnoreCase("maxDistance"))
 				return;
+			logger.info("entry name => key : "+entry.getKey()+" value : "+entry.getValue() );
 			rootNode.put(NGSI2IUDXMapping.valueOf(entry.getKey()).getValue(),
 					this.mapperDataTypeHelper(entry.getKey(), entry));
 		});
@@ -57,11 +39,9 @@ public class QueryMapper {
 
 		if (paramsMap.contains("q")) {
 			String qFilter = paramsMap.get("q");
-			System.out.println("qFilter " + qFilter);
 			String[] options = qFilter.split(";");
 			//System.out.println("options " + options);
 			Arrays.stream(options).forEach(e -> {
-				System.out.println(e);
 				List<String> queryTerms = getQueryTerms(e);
 				rootNode.put("attribute-name", queryTerms.get(0));
 				rootNode.put("attribute-value", queryTerms.get(2));
@@ -88,11 +68,12 @@ public class QueryMapper {
 			else if (geomType.equalsIgnoreCase("point")) {
 				//handle probable circle geom here.
 				String radius = null;
-				if(georel.contains("maxDistance") || georel.contains("maxdistance"))
-					radius=georel.split(";")[1].split("==")[1];
-				String[] lat_lon=coordinates.split(",");
-				String lat=lat_lon[0];
-				String lon=lat_lon[1];
+				if(paramsMap.contains("maxDistance") || paramsMap.contains("maxdistance"))
+					radius=paramsMap.get("maxDistance").substring(1);
+				String[] lat_lon=coordinates.replaceAll("\\[|\\]","").split(",");
+				String lon=lat_lon[0];
+				String lat=lat_lon[1];
+				
 				
 				rootNode.put("radius", radius);
 				rootNode.put("lon", lon);
@@ -100,6 +81,7 @@ public class QueryMapper {
 				
 				rootNode.remove("relation");// remove relation node from final json
 				rootNode.remove("geometry");// remove geometry node as it is not required in circle case.
+				rootNode.remove("options");
 			}
 			rootNode.remove("coordinates");//remove coordinates from final json object -> translated to geometry;
 			rootNode.remove("georel");//remove georel from final jsonobject;
@@ -140,6 +122,7 @@ public class QueryMapper {
 	}
 
 	private Object mapperDataTypeHelper(String key, Map.Entry<String, String> entry) {
+		logger.info("inside mapperDataTypeHelper : key ::: "+ key+ " entry :: "+entry);
 		if (key.equalsIgnoreCase("id")) {
 			return entry.getValue();
 		}
@@ -154,14 +137,7 @@ public class QueryMapper {
 			return entry.getValue();
 		}
 		else if (key.equalsIgnoreCase("coordinates")) {
-			try {
-				return URLDecoder.decode(entry.getValue(),
-						StandardCharsets.UTF_8.toString());
-			}
-			catch (UnsupportedEncodingException e) {
-				e.printStackTrace();
-			}
-			return "";
+			return entry.getValue();
 		}
 		else if (key.equals("timerel")) {
 			return entry.getValue().toString();
