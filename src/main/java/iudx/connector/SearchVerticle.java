@@ -1400,7 +1400,7 @@ public class SearchVerticle extends AbstractVerticle {
 
   		logger.info("ATTRIBUTE FILTER SIZE############# "+ attributeFilter.toString());
   		if(attributeFilter.size()==1)
-  			attributeFilter.put("__resource-id",0).put("__time",0);
+  			attributeFilter.put("__time",0);
 
   		JsonObject projectStage=new JsonObject()
 				.put("$project",attributeFilter);
@@ -1546,7 +1546,8 @@ public class SearchVerticle extends AbstractVerticle {
 
 	private void mongoFind(String api, int state, String COLLECTION, JsonObject query, FindOptions findOptions,
 			Message<Object> message) {
-		String[] hiddenFields = { "__resource-id", "__time", "_id", "__resource-group" };
+		// String[] hiddenFields = { "__resource-id", "__time", "_id", "__resource-group" };
+		String[] hiddenFields = { "__time", "_id"};
 		JsonObject requested_body = new JsonObject(message.body().toString());
 		final long starttime = System.currentTimeMillis();
 		mongo.findWithOptions(COLLECTION, query, findOptions, database_response -> {
