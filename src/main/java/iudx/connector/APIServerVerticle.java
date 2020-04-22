@@ -372,7 +372,7 @@ public class APIServerVerticle extends AbstractVerticle {
 						requested_data.put("token", token);
 					}
 					if (serverToken != null) {
-						requested_data.put("token", token);
+						requested_data.put("server-token", serverToken);
 					}
 					api = "search";
 					event = "search";
@@ -511,7 +511,7 @@ public class APIServerVerticle extends AbstractVerticle {
 						requested_data.put("token", token);
 					}
 					if (serverToken != null) {
-						requested_data.put("token", token);
+						requested_data.put("server-token", serverToken);
 					}
 
 					api = "count";
@@ -692,7 +692,7 @@ public class APIServerVerticle extends AbstractVerticle {
 					requested_data.put("token", token);
 				}
 				if (serverToken != null) {
-					requested_data.put("server-token", token);
+					requested_data.put("server-token", serverToken);
 				}
 
 				DeliveryOptions options = new DeliveryOptions();
