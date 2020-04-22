@@ -364,10 +364,14 @@ public class APIServerVerticle extends AbstractVerticle {
 			validity.setHandler(validationResultHandler -> {
 
 				String token = routingContext.request().getHeader("token"); 
+				String serverToken = routingContext.request().getHeader("server-token"); 
 
 				if (validationResultHandler.succeeded()) { 
 					logger.info("Validity  SUCCESS");
 					if (token != null) {
+						requested_data.put("token", token);
+					}
+					if (serverToken != null) {
 						requested_data.put("token", token);
 					}
 					api = "search";
@@ -500,9 +504,13 @@ public class APIServerVerticle extends AbstractVerticle {
 			Future<Void> validity = validateRequest(routingContext, "count");
 			validity.setHandler(validationResultHandler -> {
 				String token = routingContext.request().getHeader("token");
+				String serverToken = routingContext.request().getHeader("server-token");
 
 				if (validationResultHandler.succeeded()) {
 					if (token != null) {
+						requested_data.put("token", token);
+					}
+					if (serverToken != null) {
 						requested_data.put("token", token);
 					}
 
@@ -588,7 +596,7 @@ public class APIServerVerticle extends AbstractVerticle {
 		Future<Void> introspect = Future.future();
 		if (secureitems.contains(requested_data.getString("id"))) { 
 			logger.info("Client requested Secure Item");
-			if (requested_data.containsKey("token")) {
+			if (requested_data.containsKey("token") || requested_data.containsKey("server-token")) {
 				DeliveryOptions options = new DeliveryOptions();
 				options.addHeader("action", "token-introspect");
 
@@ -677,10 +685,14 @@ public class APIServerVerticle extends AbstractVerticle {
 			HttpServerResponse response = routingContext.response();
 			JsonObject requested_data = routingContext.getBodyAsJson();
 			String token = routingContext.request().getHeader("token");
+            String serverToken = routingContext.request().getHeader("server-token"); 
 
 			if (validationResultHandler.succeeded()) {
 				if (token != null) {
 					requested_data.put("token", token);
+				}
+				if (serverToken != null) {
+					requested_data.put("server-token", token);
 				}
 
 				DeliveryOptions options = new DeliveryOptions();
