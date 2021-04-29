@@ -1,0 +1,24 @@
+version: 2
+updates:
+- package-ecosystem: maven
+  directory: "/"
+  schedule:
+    interval: daily
+  open-pull-requests-limit: 10
+  ignore:
+  - dependency-name: io.vertx:vertx-web-client
+    versions:
+    - 4.0.0
+    - 4.0.1
+    - 4.0.2
+  - dependency-name: io.vertx:vertx-mongo-client
+    versions:
+    - 4.0.0
+    - 4.0.1
+    - 4.0.2
+  - dependency-name: org.apache.commons:commons-lang3
+    versions:
+    - "3.11"
+  - dependency-name: com.rabbitmq:amqp-client
+    versions:
+    - 5.8.0
